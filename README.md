@@ -33,11 +33,12 @@ Git is required for version control and to clone the repository if you are setti
 * **Check if installed:**
   ```bash
   git --version
-To install on Ubuntu/Debian:
-Bash
 
+* **To install on Ubuntu/Debian:**
+```bash
 sudo apt update
 sudo apt install git
+```
 For other OS: Visit the official Git website.
 1.2. Node.js and npm
 Node.js is the JavaScript runtime environment, and npm is its package manager. whatsapp-web.js and Vite require a recent version of Node.js.
