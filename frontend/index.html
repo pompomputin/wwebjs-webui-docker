@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" class=""> <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Device WhatsApp App</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { @apply bg-slate-100 dark:bg-slate-700 rounded-lg; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-slate-400 dark:bg-slate-500 rounded-lg; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { @apply bg-slate-500 dark:bg-slate-400; }
+
+        #qrCodeDisplay img {
+            @apply bg-white p-2.5 rounded-lg shadow-lg block mx-auto my-2.5;
+        }
+        .session-item.active { 
+            @apply bg-sky-100 dark:bg-sky-700 border-l-4 border-blue-500 dark:border-blue-400; 
+        }
+        .feature-panel { display: none; } 
+        .feature-panel.active { display: block; } 
+        .feature-link.active-feature { 
+            @apply bg-blue-500 dark:bg-blue-600 text-white shadow-md;
+        }
+        
+        .panel-container-desktop { max-height: calc(100vh - 160px); /* Adjusted for header/footer/margins */ }
+
+        .form-input, .form-textarea, .form-select {
+            @apply mt-1 block w-full px-3.5 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm 
+                   bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 
+                   focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400
+                   sm:text-sm caret-indigo-600 dark:caret-indigo-400 transition-colors duration-150;
+        }
+        .form-input::placeholder, .form-textarea::placeholder {
+            @apply text-slate-400 dark:text-slate-500;
+        }
+        .form-radio, .form-checkbox {
+            @apply h-4 w-4 text-indigo-600 dark:text-indigo-400 bg-gray-100 dark:bg-slate-600 border-gray-300 dark:border-slate-500 focus:ring-indigo-500 dark:focus:ring-indigo-400;
+        }
+        .file-input-styled {
+            @apply mt-1 block w-full text-sm 
+                   file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold 
+                   file:bg-indigo-100 dark:file:bg-indigo-700 file:text-indigo-700 dark:file:text-indigo-200 
+                   hover:file:bg-indigo-200 dark:hover:file:bg-indigo-600
+                   cursor-pointer border border-gray-300 dark:border-slate-600 rounded-lg p-1 text-slate-700 dark:text-slate-300;
+        }
+        .btn {
+            @apply w-full text-white font-semibold py-2.5 px-4 rounded-lg shadow-md 
+                   focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-800
+                   transition-all ease-in-out duration-150 transform active:scale-95;
+        }
+        .btn-blue { @apply bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600; }
+        .btn-green { @apply bg-green-500 hover:bg-green-600 focus:ring-green-500 dark:bg-green-600 dark:hover:bg-green-700; }
+        .btn-teal { @apply bg-teal-500 hover:bg-teal-600 focus:ring-teal-500 dark:bg-teal-600 dark:hover:bg-teal-700; }
+        .btn-orange { @apply bg-orange-500 hover:bg-orange-600 focus:ring-orange-500 dark:bg-orange-600 dark:hover:bg-orange-700; }
+        .btn-purple { @apply bg-purple-600 hover:bg-purple-700 focus:ring-purple-500 dark:bg-purple-700 dark:hover:bg-purple-800; }
+        .btn-indigo { @apply bg-indigo-600 hover:bg-indigo-700 focus:ring-indigo-500 dark:bg-indigo-700 dark:hover:bg-indigo-800; }
+        .btn-light { @apply bg-slate-200 hover:bg-slate-300 text-slate-800 focus:ring-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-200 dark:focus:ring-slate-500; }
+
+        /* Theme toggle icons visibility */
+        #themeIconLight, #themeIconDark { @apply h-5 w-5; }
+        html.dark #themeIconLight { @apply inline; } 
+        html.dark #themeIconDark { @apply hidden; }
+        html:not(.dark) #themeIconLight { @apply hidden; }
+        html:not(.dark) #themeIconDark { @apply inline; }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans antialiased transition-colors duration-300">
+    <div class="container mx-auto p-4 lg:p-6 min-h-screen flex flex-col">
+        <header class="bg-green-600 dark:bg-green-700 text-white p-4 sm:p-5 rounded-xl shadow-xl mb-6 flex justify-between items-center sticky top-0 z-50">
+            <div>
+                <h1 class="text-xl sm:text-2xl md:text-3xl font-bold">Multi-Device WhatsApp</h1>
+                <p id="mainStatus" class="text-xs sm:text-sm italic opacity-90 mt-0.5">Manage your sessions.</p>
+            </div>
+            <button id="themeToggleBtn" class="p-2 rounded-full hover:bg-white/20 dark:hover:bg-white/10 focus:outline-none focus:ring-2 ring-inset ring-white/50 transition-colors" aria-label="Toggle theme">
+                <svg id="themeIconLight" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                <svg id="themeIconDark" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+            </button>
+        </header>
+
+        <main class="flex flex-col lg:flex-row gap-6 flex-grow">
+            <aside class="lg:w-2/5 xl:w-1/3 w-full bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl shadow-2xl flex flex-col panel-container-desktop">
+                <h2 class="text-xl font-bold mb-4 border-b border-gray-200 dark:border-slate-700 pb-3 text-slate-700 dark:text-slate-200">Session Management</h2>
+                <div class="mb-6">
+                    <label for="newSessionId" class="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">New Session ID:</label>
+                    <div class="flex">
+                        <input type="text" id="newSessionId" class="form-input rounded-r-none" placeholder="e.g., PersonalAcc">
+                        <button id="addSessionBtn" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 text-white font-semibold rounded-r-lg transition text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 dark:focus:ring-offset-slate-800">Add Device</button>
+                    </div>
+                    <p id="addSessionStatus" class="text-xs mt-1.5 text-slate-500 dark:text-slate-400"></p>
+                </div>
+                <div id="qrSection" class="text-center p-4 border border-gray-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-700/40 mb-6">
+                    <h3 class="text-base font-semibold text-slate-700 dark:text-slate-200 mb-2">QR Code for <span id="qrSessionId" class="font-bold text-blue-600 dark:text-blue-400">N/A</span></h3>
+                    <div id="qrCodeDisplay" class="min-h-[180px] md:min-h-[200px] flex justify-center items-center bg-white dark:bg-opacity-90 rounded-md shadow-inner">
+                        <p id="qrMessage" class="text-slate-500 dark:text-slate-400 text-sm p-4">Select or add a session.</p>
+                    </div>
+                </div>
+                <div class="flex-grow overflow-y-auto custom-scrollbar pr-1"> 
+                    <h3 class="text-base font-semibold mb-2 text-slate-700 dark:text-slate-200 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">Active Sessions:</h3>
+                    <div id="sessionsList" class="space-y-2">
+                        <p class="text-sm text-slate-500 dark:text-slate-400 p-2">No sessions loaded yet.</p>
+                    </div>
+                </div>
+                <button id="refreshSessionsBtn" class="btn btn-light mt-4 w-full text-sm">Refresh List</button>
+            </aside>
+
+            <section class="lg:w-3/5 xl:w-2/3 w-full bg-white dark:bg-slate-800 p-4 sm:p-5 rounded-xl shadow-2xl panel-container-desktop flex flex-col overflow-y-auto custom-scrollbar">
+                <div id="interactionContainer" class="hidden flex-grow flex flex-col">
+                    <header class="border-b border-gray-200 dark:border-slate-700 pb-3 mb-4 sticky top-0 bg-white dark:bg-slate-800 py-2 z-10">
+                        <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100">Interacting with: <span id="currentSessionName" class="text-blue-600 dark:text-blue-400">None</span></h2>
+                        <p id="currentSessionStatus" class="text-sm text-slate-500 dark:text-slate-400 italic mt-1">Session status will appear here.</p>
+                    </header>
+                    <nav id="featureMenu" class="mb-5 pb-3 border-b border-gray-200 dark:border-slate-700">
+                        <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Features</h3>
+                        <div class="flex flex-wrap gap-2">
+                            <a href="#sendtext" data-feature-panel="sendMessagePanel" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Send Text</a>
+                            <a href="#sendimage" data-feature-panel="sendImagePanel" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Send Image</a>
+                            <a href="#sendlocation" data-feature-panel="sendLocationPanel" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Send Location</a>
+                            <a href="#contactinfo" data-feature-panel="getContactInfoPanel" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Get Contact Info</a>
+                            <a href="#setstatus" data-feature-panel="setStatusPanel" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Set Status</a>
+                            <a href="#bulksend" data-feature-panel="bulkSendPanel" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Bulk Send</a>
+                        </div>
+                    </nav>
+
+                    <div class="flex-grow"> 
+                        <section id="sendMessagePanel" class="feature-panel p-1 md:p-2 mb-6"><h3 class="text-lg font-semibold mb-3 text-slate-700 dark:text-slate-200">Send Text Message</h3><form id="sendMessageForm" class="space-y-4"><div><label for="recipientNumber" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Recipient:</label><input type="text" id="recipientNumber" name="recipientNumber" required class="form-input" placeholder="Number/ID or group@g.us"></div><div><label for="messageText" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Message:</label><textarea id="messageText" name="messageText" rows="3" required class="form-textarea" placeholder="Type your message..."></textarea></div><button type="submit" class="btn btn-green">Send Message</button></form><p id="sendResponse" class="mt-3 text-sm"></p></section>
+                        <section id="sendImagePanel" class="feature-panel p-1 md:p-2 mb-6"><h3 class="text-lg font-semibold mb-3 text-slate-700 dark:text-slate-200">Send Image</h3><form id="sendImageForm" class="space-y-4"><div><label for="imageRecipientNumber" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Recipient:</label><input type="text" id="imageRecipientNumber" name="imageRecipientNumber" required class="form-input"></div><div class="my-3"><span class="text-sm font-medium text-slate-600 dark:text-slate-400">Source:</span><div class="mt-1 flex items-center space-x-4"><label class="inline-flex items-center"><input type="radio" class="form-radio" name="imageSourceType" value="file" checked><span class="ml-2 text-sm text-slate-700 dark:text-slate-300">Upload</span></label><label class="inline-flex items-center"><input type="radio" class="form-radio" name="imageSourceType" value="url"><span class="ml-2 text-sm text-slate-700 dark:text-slate-300">URL</span></label></div></div><div id="imageFileUploadDiv"><label for="imageFileInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Image File:</label><input type="file" id="imageFileInput" name="imageFile" accept="image/*,video/*" class="file-input-styled"></div><div id="imageUrlDiv" class="hidden"><label for="imageUrlInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Image URL:</label><input type="url" id="imageUrlInput" name="imageUrl" class="form-input" placeholder="https://example.com/image.png"></div><div><label for="imageCaption" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Caption (Optional):</label><input type="text" id="imageCaption" name="imageCaption" class="form-input"></div><button type="submit" class="btn btn-teal">Send Image</button></form><p id="sendImageResponse" class="mt-3 text-sm"></p></section>
+                        <section id="sendLocationPanel" class="feature-panel p-1 md:p-2 mb-6"><h3 class="text-lg font-semibold mb-3 text-slate-700 dark:text-slate-200">Send Location</h3><form id="sendLocationForm" class="space-y-4"><div><label for="locationRecipientNumber" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Recipient:</label><input type="text" id="locationRecipientNumber" name="locationRecipientNumber" required class="form-input"></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-4"><div><label for="latitudeInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Latitude:</label><input type="number" step="any" id="latitudeInput" name="latitude" required class="form-input" placeholder="37.422"></div><div><label for="longitudeInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Longitude:</label><input type="number" step="any" id="longitudeInput" name="longitude" required class="form-input" placeholder="-122.084"></div></div><div><label for="locationDescriptionInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Description (Optional):</label><input type="text" id="locationDescriptionInput" name="locationDescription" class="form-input" placeholder="Location Name"></div><button type="submit" class="btn btn-orange">Send Location</button></form><p id="sendLocationResponse" class="mt-3 text-sm"></p></section>
+                        <section id="getContactInfoPanel" class="feature-panel p-1 md:p-2 mb-6"><h3 class="text-lg font-semibold mb-3 text-slate-700 dark:text-slate-200">Get Contact Info</h3><div class="space-y-4"><div><label for="contactIdInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Contact Number/ID:</label><input type="text" id="contactIdInput" class="form-input"></div><button id="getContactInfoBtn" class="btn btn-purple">Get Info</button></div><div id="contactInfoResult" class="mt-4 text-sm p-3 border-t border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/40 rounded-md"><p class="text-slate-500 dark:text-slate-400">Details appear here.</p></div></section>
+                        <section id="setStatusPanel" class="feature-panel p-1 md:p-2 mb-6"><h3 class="text-lg font-semibold mb-3 text-slate-700 dark:text-slate-200">Set Status (About)</h3><form id="setStatusForm" class="space-y-4"><div><label for="statusMessageInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">New Status:</label><input type="text" id="statusMessageInput" name="statusMessage" class="form-input" placeholder="Your new status..."></div><button type="submit" class="btn btn-indigo">Set Status</button></form><p id="setStatusResponse" class="mt-3 text-sm"></p></section>
+                        <section id="bulkSendPanel" class="feature-panel p-1 md:p-2 mb-6"><h3 class="text-lg font-semibold mb-3 text-slate-700 dark:text-slate-200">Bulk Send Message</h3><form id="bulkSendForm" class="space-y-4"><div><label for="bulkRecipients" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Recipients (comma/newline):</label><textarea id="bulkRecipients" name="bulkRecipients" rows="3" required class="form-textarea" placeholder="e.g., 123..., 456..."></textarea></div><div><label for="bulkMessageText" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Message Text (Optional if media):</label><textarea id="bulkMessageText" name="bulkMessageText" rows="2" class="form-textarea"></textarea></div><hr class="my-2 border-gray-200 dark:border-slate-700"><h4 class="text-base font-medium text-gray-600 dark:text-slate-300">Optional Media (Image/Video):</h4><div class="my-2"><span class="text-sm font-medium text-slate-600 dark:text-slate-400">Source:</span><div class="mt-1 flex items-center space-x-4"><label class="inline-flex items-center"><input type="radio" class="form-radio" name="bulkMediaSourceType" value="none" checked><span class="ml-2 text-sm text-slate-700 dark:text-slate-300">None</span></label><label class="inline-flex items-center"><input type="radio" class="form-radio" name="bulkMediaSourceType" value="file"><span class="ml-2 text-sm text-slate-700 dark:text-slate-300">Upload</span></label><label class="inline-flex items-center"><input type="radio" class="form-radio" name="bulkMediaSourceType" value="url"><span class="ml-2 text-sm text-slate-700 dark:text-slate-300">URL</span></label></div></div><div id="bulkMediaFileUploadDiv" class="hidden"><label for="bulkMediaFileInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Media File:</label><input type="file" id="bulkMediaFileInput" name="bulkMediaFile" accept="image/*,video/*" class="file-input-styled"></div><div id="bulkMediaUrlDiv" class="hidden"><label for="bulkMediaUrlInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Media URL:</label><input type="url" id="bulkMediaUrlInput" name="bulkMediaUrl" class="form-input" placeholder="https://example.com/media.mp4"></div><div><label for="bulkMediaCaptionInput" class="block text-sm font-medium text-slate-600 dark:text-slate-400">Media Caption:</label><input type="text" id="bulkMediaCaptionInput" name="bulkMediaCaption" class="form-input"></div><button type="submit" class="btn btn-purple">Start Bulk Send</button></form><div id="bulkSendResponse" class="mt-3 text-sm"><p class="text-slate-600 dark:text-slate-400">Status...</p><div id="bulkSendResultsLog" class="mt-2 max-h-32 overflow-y-auto border border-gray-200 dark:border-slate-700 p-2 bg-slate-50 dark:bg-slate-700/40 rounded text-xs custom-scrollbar"></div></div></section>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-auto pt-6 border-t border-gray-300 dark:border-slate-600">
+                        <section id="chatsSection" class="flex flex-col">
+                            <div class="flex justify-between items-center mb-2"><h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200">Chats</h3><button id="refreshChatsBtn" class="text-xs bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1.5 px-3 rounded-md transition shadow-sm focus:ring-2 focus:ring-blue-400 focus:ring-offset-1 dark:focus:ring-offset-slate-800">Refresh</button></div>
+                            <div id="chatsListDisplay" class="h-48 lg:h-60 overflow-y-auto custom-scrollbar border border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/40 p-3 rounded-lg flex-grow"><p class="text-sm text-slate-500 dark:text-slate-400">Select session & refresh.</p></div>
+                        </section>
+                        <section id="messageLogSection" class="flex flex-col">
+                            <h3 class="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2">Message Log</h3>
+                            <div id="messageLogDisplay" class="h-48 lg:h-60 overflow-y-auto custom-scrollbar border border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/40 p-3 rounded-lg space-y-2 flex-grow"><p class="text-sm text-slate-500 dark:text-slate-400">Messages appear here.</p></div>
+                        </section>
+                    </div>
+                </div>
+                <div id="noSessionSelectedMsg" class="text-center py-10 flex-grow flex items-center justify-center">
+                    <p class="text-slate-500 dark:text-slate-400 text-lg">Please add and select a session to begin.</p>
+                </div>
+            </section>
+        </main>
+        <footer class="text-center text-slate-500 dark:text-slate-400 text-xs mt-8 pb-6"><p>&copy; Multi-Device App</p></footer>
+    </div>
+    <script src="./js/app.js"></script>
+</body>
+</html>
