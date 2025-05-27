@@ -35,48 +35,58 @@ Git is required for version control and to clone the repository if you are setti
   git --version
 
 * **To install on Ubuntu/Debian:**
-```bash
-sudo apt update
-sudo apt install git
-```
-For other OS: Visit the official Git website.
-1.2. Node.js and npm
+  ```bash
+  sudo apt update
+  sudo apt install git
+  ```
+* **For other OS: Visit the official Git website.**
+
+### 1.2. Node.js and npm
 Node.js is the JavaScript runtime environment, and npm is its package manager. whatsapp-web.js and Vite require a recent version of Node.js.
 
-Recommended Node.js Version: 18.x LTS or 20.x LTS (or higher).
-Check if installed:
-Bash
+* ***Recommended Node.js Version: 18.x LTS or 20.x LTS (or higher).***
+* **Check if installed:**
+   ```Bash
 
-node -v
-npm -v
-To install/update on Ubuntu/Debian (using NodeSource repository for up-to-date versions): For Node.js 20.x (Recommended):
-Bash
+  node -v
+  npm -v
+  ```
+* **To install/update on Ubuntu/Debian (using NodeSource repository for up-to-date versions): For Node.js 20.x (Recommended):**
 
-curl -fsSL [https://deb.nodesource.com/setup_20.x](https://deb.nodesource.com/setup_20.x) | sudo -E bash -
-sudo apt-get install -y nodejs
+ ```Bash
+
+     curl -fsSL [https://deb.nodesource.com/setup_20.x](https://deb.nodesource.com/setup_20.x) | sudo -E bash -
+     sudo apt-get install -y nodejs
+ ```
 This will also install a compatible version of npm.
-For other OS or versions: Visit the official Node.js website or use a version manager like nvm.
-2. Project Setup
-2.1. Clone the Repository (If Applicable)
+
+* **For other OS or versions: Visit the official Node.js website or use a version manager like nvm.**
+
+## 2. Project Setup
+### 2.1. Clone the Repository (If Applicable)
 If you have this project on GitHub, clone it to your local machine/VM:
 
-Bash
+```Bash
 
-git clone [https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git)
-cd YOUR_REPOSITORY_NAME
+   git clone [https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git)
+   cd YOUR_REPOSITORY_NAME
+```
+
 (Replace YOUR_USERNAME and YOUR_REPOSITORY_NAME with your actual details. The YOUR_REPOSITORY_NAME directory should be your whatsapp_business_app root). If you already have the files locally, skip this step.
 
-2.2. Backend Setup
+### 2.2. Backend Setup
 The backend handles WhatsApp communication.
 
-Navigate to the backend directory:
-Bash
+   1. Navigate to the backend directory:
 
+```Bash
 cd path/to/your/whatsapp_business_app/backend
-Install backend dependencies: The package.json in this directory lists all necessary Node.js modules. Key dependencies include: axios, cors, express, multer, socket.io, whatsapp-web.js. Run the following command to install them:
-Bash
+```
+  2. Install backend dependencies: The package.json in this directory lists all necessary Node.js modules. Key dependencies include: axios, cors, express, multer, socket.io, whatsapp-web.js. Run the following command to install them:
 
+```Bash
 npm install
+```
 Puppeteer Dependencies (Linux Only): whatsapp-web.js uses Puppeteer. On Linux, you might need to install additional system libraries if not already present:
 Bash
 
