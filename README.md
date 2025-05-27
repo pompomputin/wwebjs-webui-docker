@@ -30,67 +30,53 @@ Before you begin, ensure your system has the following installed:
 
 ### 1.1. Git
 Git is required for version control and to clone the repository if you are setting it up from GitHub.
-* **Check if installed:** `git --version`
-* **To install on Ubuntu/Debian:**
-    ```bash
-    sudo apt update
-    sudo apt install git
-    ```
-* **For other OS:** Visit the [official Git website](https://git-scm.com/downloads).
-
-### 1.2. Node.js and npm
-Node.js is the JavaScript runtime environment, and npm is its package manager. `whatsapp-web.js` and Vite require a recent version of Node.js.
-* **Recommended Node.js Version:** 18.x LTS or 20.x LTS (or higher).
 * **Check if installed:**
-    ```bash
-    node -v
-    npm -v
-    ```
-* **To install/update on Ubuntu/Debian (using NodeSource repository for up-to-date versions):**
-    For Node.js 20.x (Recommended):
-    ```bash
-    curl -fsSL [https://deb.nodesource.com/setup_20.x](https://deb.nodesource.com/setup_20.x) | sudo -E bash -
-    sudo apt-get install -y nodejs
-    ```
-    This will also install a compatible version of npm.
-* **For other OS or versions:** Visit the [official Node.js website](https://nodejs.org/) or use a version manager like [nvm](https://github.com/nvm-sh/nvm).
+  ```bash
+  git --version
+To install on Ubuntu/Debian:
+Bash
 
-## 2. Project Setup
+sudo apt update
+sudo apt install git
+For other OS: Visit the official Git website.
+1.2. Node.js and npm
+Node.js is the JavaScript runtime environment, and npm is its package manager. whatsapp-web.js and Vite require a recent version of Node.js.
 
-### 2.1. Clone the Repository (If Applicable)
+Recommended Node.js Version: 18.x LTS or 20.x LTS (or higher).
+Check if installed:
+Bash
+
+node -v
+npm -v
+To install/update on Ubuntu/Debian (using NodeSource repository for up-to-date versions): For Node.js 20.x (Recommended):
+Bash
+
+curl -fsSL [https://deb.nodesource.com/setup_20.x](https://deb.nodesource.com/setup_20.x) | sudo -E bash -
+sudo apt-get install -y nodejs
+This will also install a compatible version of npm.
+For other OS or versions: Visit the official Node.js website or use a version manager like nvm.
+2. Project Setup
+2.1. Clone the Repository (If Applicable)
 If you have this project on GitHub, clone it to your local machine/VM:
-```bash
+
+Bash
+
 git clone [https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git)
-cd YOUR_REPOSITORY_NAME 
-# This directory should be your 'whatsapp_business_app' root
-Replace YOUR_USERNAME and YOUR_REPOSITORY_NAME accordingly. If you already have the files, skip this step.
+cd YOUR_REPOSITORY_NAME
+(Replace YOUR_USERNAME and YOUR_REPOSITORY_NAME with your actual details. The YOUR_REPOSITORY_NAME directory should be your whatsapp_business_app root). If you already have the files locally, skip this step.
 
 2.2. Backend Setup
 The backend handles WhatsApp communication.
 
 Navigate to the backend directory:
-
 Bash
 
 cd path/to/your/whatsapp_business_app/backend
-Install backend dependencies:
-The package.json in this directory lists all necessary Node.js modules.
-Key dependencies include:
-
-axios: For making HTTP requests (e.g., fetching media from URLs).
-cors: For enabling Cross-Origin Resource Sharing.
-express: Web application framework for Node.js.
-multer: Middleware for handling multipart/form-data (file uploads).
-socket.io: For real-time, bidirectional communication.
-whatsapp-web.js: The core library for WhatsApp Web automation.
-Run the following command to install them:
-
+Install backend dependencies: The package.json in this directory lists all necessary Node.js modules. Key dependencies include: axios, cors, express, multer, socket.io, whatsapp-web.js. Run the following command to install them:
 Bash
 
 npm install
-Puppeteer Dependencies (Linux Only):
-whatsapp-web.js uses Puppeteer, which runs a headless Chrome instance. On Linux, you might need to install additional system libraries if not already present:
-
+Puppeteer Dependencies (Linux Only): whatsapp-web.js uses Puppeteer. On Linux, you might need to install additional system libraries if not already present:
 Bash
 
 sudo apt-get update && sudo apt-get install -y \
@@ -99,9 +85,7 @@ sudo apt-get update && sudo apt-get install -y \
     libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 \
     libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 \
     libxrandr2 libxrender1 libxss1 libxtst6 lsb-release wget xdg-utils \
-    --no-install-recommends 
-(The --no-install-recommends flag can help minimize the installation size).
-
+    --no-install-recommends
 2.3. Frontend Setup (Vue.js with Vite)
 The frontend is a Vue.js single-page application.
 
@@ -110,21 +94,10 @@ Navigate to your Vue frontend project directory:
 Bash
 
 cd path/to/your/whatsapp_business_app/vue-frontend/vue-whatsapp-frontend
-# Adjust 'vue-whatsapp-frontend' if your Vue project folder has a different name
-Install frontend dependencies:
-The package.json here lists all JavaScript libraries for the Vue app.
-Key dependencies include:
+(Adjust vue-whatsapp-frontend if your Vue project folder has a different name).
 
-vue: The progressive JavaScript framework.
-vue-router: Official router for Vue.js.
-pinia: Intuitive, type-safe, and flexible state management for Vue.
-socket.io-client: Client-side library for Socket.IO.
-qrcode.vue: Vue component for generating QR codes. Development dependencies (devDependencies) include:
-vite: Next-generation frontend tooling.
-@vitejs/plugin-vue: Vite plugin for Vue.
-tailwindcss: A utility-first CSS framework.
-postcss, autoprefixer, @tailwindcss/postcss: For processing Tailwind CSS.
-eslint, prettier: For code linting and formatting.
+Install frontend dependencies:
+The package.json here lists all JavaScript libraries for the Vue app. Key dependencies include: vue, vue-router, pinia, socket.io-client, qrcode.vue. Development dependencies include vite, @vitejs/plugin-vue, tailwindcss, postcss, autoprefixer, @tailwindcss/postcss.
 Run the following command to install them:
 
 Bash
@@ -166,10 +139,9 @@ Start the Vite development server:
 Bash
 
 npm run dev -- --host
-The -- --host flag makes the Vite server accessible on your local network (and via your VM's public IP if firewall rules are set).
-Vite will typically start on a port like 5173 or 8787. The terminal will show you the URLs, e.g.:
+The -- --host flag makes the Vite server accessible on your local network (and via your VM's public IP if firewall rules are set). Vite will typically start on a port like 5173 or 8787. The terminal will show you the URLs, e.g.:
   ➜  Local:   http://localhost:5173/
-  ➜  Network: http://YOUR_VM_LOCAL_IP:5173/ 
+  ➜  Network: http://YOUR_VM_LOCAL_IP:5173/
 3.3. Firewall Configuration
 Ensure the ports for both the backend (e.g., 3000) and the frontend Vite dev server (e.g., 5173 or 8787) are open in your VM's firewall. This includes:
 
@@ -196,7 +168,7 @@ Run the build command:
 Bash
 
 npm run build
-This will create an optimized static build of your frontend in a dist folder (e.g., vue-frontend/vue-whatsapp-frontend/dist/).
+This will create an optimized static build of your frontend in a dist folder.
 
 Deploy the contents of this dist folder to any static web hosting service or configure a web server like Nginx or Apache to serve these files.
 
