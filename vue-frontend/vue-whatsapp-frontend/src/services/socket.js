@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { useSessionStore } from '../stores/sessionStore';
 import { useChatStore } from '../stores/chatStore'; // <-- IMPORT CHAT STORE
 
-const BASE_URL = 'http://43.134.142.240:3000'; // <--- !!! SET THIS
+const BASE_URL = 'http://YOUR_VM_PUBLIC_IP:3000'; // <--- !!! SET THIS
 let socket = null;
 
 export function initializeSocket() {
