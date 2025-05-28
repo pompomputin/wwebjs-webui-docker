@@ -10,9 +10,8 @@ const BASE_URL = 'http://43.134.142.240:3000'; // <--- !!! IMPORTANT: SET THIS T
 async function request(endpoint, options = {}) {
     const url = `${BASE_URL}${endpoint}`;
     
-    // Default headers, but don't set Content-Type if body is FormData
     const headers = { ...options.headers };
-    if (!(options.body instanceof FormData)) {
+    if (!(options.body instanceof FormData)) { // Don't set Content-Type for FormData
         headers['Content-Type'] = 'application/json';
     }
 
@@ -26,15 +25,13 @@ async function request(endpoint, options = {}) {
         const contentType = response.headers.get("content-type");
         let responseData;
 
-        // Try to parse as JSON if appropriate, otherwise get text
         if (contentType && contentType.indexOf("application/json") !== -1) {
             responseData = await response.json();
         } else {
-            responseData = await response.text(); // Fallback for non-JSON or empty responses
+            responseData = await response.text(); 
         }
 
         if (!response.ok) {
-            // Try to extract a more specific error message from the responseData
             const errorMessage = (typeof responseData === 'object' && responseData && responseData.error) 
                                  ? responseData.error 
                                  : (typeof responseData === 'string' && responseData ? responseData : `HTTP error! Status: ${response.status}`);
@@ -42,13 +39,9 @@ async function request(endpoint, options = {}) {
             return { success: false, error: errorMessage, status: response.status, data: responseData };
         }
 
-        // If response is OK, ensure a consistent structure for the return value
         if (typeof responseData === 'object' && responseData !== null) {
-            // If 'success' property already exists, return as is.
-            // Otherwise, assume success and wrap if it's not already in our expected format.
             return responseData.success !== undefined ? responseData : { success: true, ...responseData };
         } else {
-            // For text responses or other types on success
             return { success: true, data: responseData };
         }
     } catch (error) {
@@ -63,7 +56,7 @@ export const initSessionApi = (sessionId) => {
 };
 
 export const getSessionsApi = () => {
-    return request('/sessions'); // GET is default method in our helper if not specified
+    return request('/sessions');
 };
 
 export const removeSessionApi = (sessionId) => {
@@ -78,8 +71,6 @@ export const sendMessageApi = (sessionId, recipient, message) => {
     });
 };
 
-// For sendImageApi, FormData handles its own Content-Type.
-// The 'request' helper is modified to not set Content-Type if body is FormData.
 export const sendImageApi = (sessionId, formData) => {
     return request(`/session/send-image/${sessionId}`, { 
         method: 'POST', 
@@ -114,8 +105,26 @@ export const setStatusApi = (sessionId, statusMessage) => {
     });
 };
 
-// Note: For "Bulk Send", the frontend iterates and calls sendMessageApi or sendImageApi repeatedly.
-// There isn't a dedicated bulk send API endpoint in this service file,
-// as per your clarification that the frontend handles the loop.
+// Function for "sendStateTyping"
+export const sendTypingStateApi = (sessionId, chatId) => {
+    return request(`/session/${sessionId}/chat/${chatId}/send-typing`, {
+        method: 'POST',
+    });
+};
 
-// You can add more API functions here as you implement more features.
+// Function for "sendSeen" - THIS WAS LIKELY THE MISSING ONE
+export const sendSeenApi = (sessionId, chatId) => {
+    return request(`/session/${sessionId}/chat/${chatId}/send-seen`, {
+        method: 'POST',
+    });
+};
+
+// Function for "sendPresenceAvailable"
+export const setPresenceOnlineApi = (sessionId) => {
+    return request(`/session/${sessionId}/set-presence-online`, {
+        method: 'POST',
+    });
+};
+
+// Note: For "Bulk Send", the frontend iterates and calls sendMessageApi or sendImageApi repeatedly.
+// No dedicated bulk send API endpoint in this service file itself.
