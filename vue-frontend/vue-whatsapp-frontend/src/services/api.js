@@ -1,17 +1,26 @@
 // src/services/api.js
-const BASE_URL = 'http://YOUR_VM_PUBLIC_IP:3000'; // <--- !!! IMPORTANT: SET THIS TO YOUR BACKEND URL
+const BASE_URL = 'http://68.183.233.123:3000'; // YOUR BACKEND URL
 
 /**
  * Generic request helper function.
  * @param {string} endpoint - The API endpoint (e.g., '/sessions').
  * @param {object} options - Fetch options (method, body, headers, etc.).
+ * @param {boolean} isLogin - Flag to indicate if this is the login request itself.
  * @returns {Promise<object>} - The JSON response or an error object.
  */
-async function request(endpoint, options = {}) {
+async function request(endpoint, options = {}, isLogin = false) {
     const url = `${BASE_URL}${endpoint}`;
     
     const headers = { ...options.headers };
-    if (!(options.body instanceof FormData)) { // Don't set Content-Type for FormData
+
+    if (!isLogin) {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+    }
+
+    if (!(options.body instanceof FormData) && options.body) {
         headers['Content-Type'] = 'application/json';
     }
 
@@ -25,10 +34,19 @@ async function request(endpoint, options = {}) {
         const contentType = response.headers.get("content-type");
         let responseData;
 
+        if (response.status === 401 && !isLogin) {
+            console.error('API Request Unauthorized (401). Token might be invalid or expired.');
+            // Consider triggering logout via authStore or event bus for a better UX
+            // import { useAuthStore } from '@/stores/authStore'; // This would create circular dependency if used directly here.
+            // Event bus or direct window event might be better for decoupling.
+            // For now, we just return error; frontend components should handle this.
+            return { success: false, error: 'Unauthorized. Please login again.', status: response.status };
+        }
+
         if (contentType && contentType.indexOf("application/json") !== -1) {
             responseData = await response.json();
         } else {
-            responseData = await response.text(); 
+            responseData = await response.text();
         }
 
         if (!response.ok) {
@@ -50,6 +68,15 @@ async function request(endpoint, options = {}) {
     }
 }
 
+// --- Authentication API Call ---
+export const loginApi = (credentials) => {
+    return request('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(credentials),
+    }, true); // Pass true for isLogin to skip adding Auth header
+};
+
+
 // --- Session Management API Calls ---
 export const initSessionApi = (sessionId) => {
     return request(`/session/init/${sessionId}`, { method: 'POST' });
@@ -63,6 +90,11 @@ export const removeSessionApi = (sessionId) => {
     return request(`/session/remove/${sessionId}`, { method: 'POST' });
 };
 
+// --- New function to check WhatsApp Number ---
+export const checkWhatsAppNumberApi = (sessionId, numberToCheck) => {
+    return request(`/session/is-registered/${sessionId}/${encodeURIComponent(numberToCheck)}`, { method: 'GET' });
+};
+
 // --- Feature-Specific API Calls ---
 export const sendMessageApi = (sessionId, recipient, message) => {
     return request(`/session/send-message/${sessionId}`, {
@@ -72,9 +104,9 @@ export const sendMessageApi = (sessionId, recipient, message) => {
 };
 
 export const sendImageApi = (sessionId, formData) => {
-    return request(`/session/send-image/${sessionId}`, { 
-        method: 'POST', 
-        body: formData 
+    return request(`/session/send-image/${sessionId}`, {
+        method: 'POST',
+        body: formData
     });
 };
 
@@ -89,11 +121,11 @@ export const getContactInfoApi = (sessionId, contactId) => {
 export const sendLocationApi = (sessionId, recipient, latitude, longitude, description) => {
     return request(`/session/send-location/${sessionId}`, {
         method: 'POST',
-        body: JSON.stringify({ 
-            number: recipient, 
-            latitude: parseFloat(latitude), 
-            longitude: parseFloat(longitude), 
-            description: description 
+        body: JSON.stringify({
+            number: recipient,
+            latitude: parseFloat(latitude),
+            longitude: parseFloat(longitude),
+            description: description
         }),
     });
 };
@@ -105,26 +137,20 @@ export const setStatusApi = (sessionId, statusMessage) => {
     });
 };
 
-// Function for "sendStateTyping"
 export const sendTypingStateApi = (sessionId, chatId) => {
     return request(`/session/${sessionId}/chat/${chatId}/send-typing`, {
         method: 'POST',
     });
 };
 
-// Function for "sendSeen" - THIS WAS LIKELY THE MISSING ONE
 export const sendSeenApi = (sessionId, chatId) => {
     return request(`/session/${sessionId}/chat/${chatId}/send-seen`, {
         method: 'POST',
     });
 };
 
-// Function for "sendPresenceAvailable"
 export const setPresenceOnlineApi = (sessionId) => {
     return request(`/session/${sessionId}/set-presence-online`, {
         method: 'POST',
     });
 };
-
-// Note: For "Bulk Send", the frontend iterates and calls sendMessageApi or sendImageApi repeatedly.
-// No dedicated bulk send API endpoint in this service file itself.
