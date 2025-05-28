@@ -73,7 +73,6 @@ Node.js is the runtime, npm is its package manager.
 If setting up from GitHub:
 
 ```bash
-git clone https://github.com/pedroslopez/whatsapp-web.js.git
 git clone https://github.com/azhdaha-100kg/whatsapp-multi-device-app.git
 cd whatsapp-multi-device-app
 ```
