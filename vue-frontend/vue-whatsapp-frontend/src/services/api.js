@@ -1,5 +1,5 @@
 // src/services/api.js
-const BASE_URL = 'http://43.134.142.240:3000'; // <--- !!! IMPORTANT: SET THIS TO YOUR BACKEND URL
+const BASE_URL = 'http://YOUR_VM_PUBLIC_IP:3000'; // <--- !!! IMPORTANT: SET THIS TO YOUR BACKEND URL
 
 /**
  * Generic request helper function.
