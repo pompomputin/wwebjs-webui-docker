@@ -218,10 +218,6 @@ If you use `createWebHashHistory`, no server config is needed.
 
 ---
 
-## License
-
-MIT (or as specified in your repository)
-
 ---
 
 This README should provide a complete guide for setup, configuration, and running your multi-device WhatsApp web interface project.
