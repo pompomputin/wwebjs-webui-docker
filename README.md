@@ -1,189 +1,227 @@
 # Multi-Device WhatsApp Web Interface
 
-A web application to interact with multiple WhatsApp accounts simultaneously, built with a Node.js backend (using `whatsapp-web.js`) and a Vue.js frontend.
+A web application to interact with multiple WhatsApp accounts simultaneously, built with a Node.js backend (using [`whatsapp-web.js`](https://github.com/pedroslopez/whatsapp-web.js)) and a Vue.js frontend.
+
+---
 
 ## Features Overview
 
-* Multi-Device Session Management (Add, List, Select, QR Auth, Remove)
-* Real-time Updates via Socket.IO
-* Implemented User Actions (for each active session):
-    * Send Text Messages
-    * Send Images/Videos (via file upload or direct URL)
-    * Send Locations
-    * Get Contact Information
-    * Set User Status (About/Bio)
-    * Bulk Send Messages (Client-side iteration sending text and/or media)
-* Theming: Light and Dark mode support.
-* Responsive UI with Tailwind CSS.
-* Frontend routing with Vue Router.
-* State management with Pinia.
+- **Multi-Device Session Management**: Add, List, Select, QR Auth, Remove
+- **Real-time Updates via Socket.IO**
+- **User Actions per Session**:
+    - Send Text Messages
+    - Send Images/Videos (via file upload or direct URL)
+    - Send Locations
+    - Get Contact Information
+    - Set User Status (About/Bio)
+    - Bulk Send Messages (client-side iteration for text/media)
+- **Theming**: Light and Dark mode
+- **Responsive UI**: Tailwind CSS
+- **Frontend Routing**: Vue Router
+- **State Management**: Pinia
 
-## Core Technologies Used
+---
 
-* **Backend:** Node.js, Express.js, `whatsapp-web.js`, Socket.IO, Multer (for uploads), Axios (for URL fetching)
-* **Frontend:** Vue.js 3 (Composition API), Vite, Pinia, Vue Router, Tailwind CSS, Socket.IO Client, `qrcode.vue`
-* **Language:** JavaScript
+## Core Technologies
+
+- **Backend**: Node.js, Express, [`whatsapp-web.js`](https://github.com/pedroslopez/whatsapp-web.js), Socket.IO, Multer, Axios
+- **Frontend**: Vue 3 (Composition API), Vite, Pinia, Vue Router, Tailwind CSS, Socket.IO Client, `qrcode.vue`
+- **Language**: JavaScript
+
+---
 
 ## 1. Prerequisites
 
-Before you begin, ensure your system has the following installed:
-
 ### 1.1. Git
-Git is required for version control and to clone the repository if you are setting it up from GitHub.
-* **Check if installed:**
+
+Required for version control and to clone this repository.
+
+- **Check if installed**:
   ```bash
   git --version
-
-* **To install on Ubuntu/Debian:**
+  ```
+- **Install on Ubuntu/Debian**:
   ```bash
   sudo apt update
   sudo apt install git
   ```
-* **For other OS: Visit the official Git website.**
+- **Other OS**: See [Git Downloads](https://git-scm.com/downloads)
 
 ### 1.2. Node.js and npm
-Node.js is the JavaScript runtime environment, and npm is its package manager. whatsapp-web.js and Vite require a recent version of Node.js.
 
-* ***Recommended Node.js Version: 18.x LTS or 20.x LTS (or higher).***
-* **Check if installed:**
-   ```Bash
+Node.js is the runtime, npm is its package manager.
 
+- **Recommended Node.js**: 18.x LTS or 20.x LTS (or higher)
+- **Check if installed**:
+  ```bash
   node -v
   npm -v
   ```
-* **To install/update on Ubuntu/Debian (using NodeSource repository for up-to-date versions): For Node.js 20.x (Recommended):**
+- **Install/Update on Ubuntu/Debian**:
+  ```bash
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  sudo apt-get install -y nodejs
+  ```
+- **Other OS**: See [Node.js official site](https://nodejs.org/) or use [nvm](https://github.com/nvm-sh/nvm)
 
- ```Bash
-
-     curl -fsSL [https://deb.nodesource.com/setup_20.x](https://deb.nodesource.com/setup_20.x) | sudo -E bash -
-     sudo apt-get install -y nodejs
- ```
-This will also install a compatible version of npm.
-
-* **For other OS or versions: Visit the official Node.js website or use a version manager like nvm.**
+---
 
 ## 2. Project Setup
-### 2.1. Clone the Repository (If Applicable)
-If you have this project on GitHub, clone it to your local machine/VM:
 
-```Bash
+### 2.1. Clone the Repository
 
-   git clone [https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git)
-   cd YOUR_REPOSITORY_NAME
+If setting up from GitHub:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
+cd YOUR_REPOSITORY_NAME
 ```
+Replace `YOUR_USERNAME` and `YOUR_REPOSITORY_NAME` as appropriate.
 
-(Replace YOUR_USERNAME and YOUR_REPOSITORY_NAME with your actual details. The YOUR_REPOSITORY_NAME directory should be your whatsapp_business_app root). If you already have the files locally, skip this step.
+---
 
 ### 2.2. Backend Setup
-The backend handles WhatsApp communication.
 
-   1. Navigate to the backend directory:
+Handles WhatsApp communication.
 
-```Bash
+1. **Navigate to backend directory:**
+   ```bash
+   cd path/to/your/whatsapp_business_app/backend
+   ```
+2. **Install backend dependencies:**
+   ```bash
+   npm install
+   ```
+   Core dependencies: `axios`, `cors`, `express`, `multer`, `socket.io`, `whatsapp-web.js`
+
+3. **Puppeteer dependencies (Linux only)**  
+   `whatsapp-web.js` uses Puppeteer. On Linux, install required system libraries:
+   ```bash
+   sudo apt-get update && sudo apt-get install -y \
+     ca-certificates fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 libatk1.0-0 \
+     libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgbm1 libgcc1 libglib2.0-0 \
+     libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 \
+     libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 \
+     libxrandr2 libxrender1 libxss1 libxtst6 lsb-release wget xdg-utils \
+     --no-install-recommends
+   ```
+
+---
+
+### 2.3. Frontend Setup (Vue.js + Vite)
+
+Vue 3 SPA.
+
+1. **Navigate to frontend directory:**
+   ```bash
+   cd path/to/your/whatsapp_business_app/vue-frontend/vue-whatsapp-frontend
+   ```
+   (Adjust folder name if different.)
+
+2. **Install frontend dependencies:**
+   ```bash
+   npm install
+   ```
+   Core dependencies: `vue`, `vue-router`, `pinia`, `socket.io-client`, `qrcode.vue`.  
+   Dev: `vite`, `@vitejs/plugin-vue`, `tailwindcss`, `postcss`, `autoprefixer`, `@tailwindcss/postcss`.
+
+3. **Critical: Set backend URL in frontend services**
+
+   Edit these files and set your backend's actual IP and port:
+
+   - `src/services/api.js`  
+     ```js
+     const BASE_URL = 'http://YOUR_VM_PUBLIC_IP:3000'; // <--- SET THIS
+     ```
+   - `src/services/socket.js`  
+     ```js
+     const BASE_URL = 'http://YOUR_VM_PUBLIC_IP:3000'; // <--- SET THIS
+     ```
+
+   For example, if your backend runs on 43.134.142.240:3000:
+   ```
+   const BASE_URL = 'http://43.134.142.240:3000';
+   ```
+
+---
+
+## 3. Running the Application
+
+You’ll run backend and frontend servers simultaneously (separate terminals).
+
+### 3.1. Start the Backend
+
+```bash
 cd path/to/your/whatsapp_business_app/backend
-```
-  2. Install backend dependencies: The package.json in this directory lists all necessary Node.js modules. Key dependencies include: axios, cors, express, multer, socket.io, whatsapp-web.js. Run the following command to install them:
-
-```Bash
-npm install
-```
-Puppeteer Dependencies (Linux Only): whatsapp-web.js uses Puppeteer. On Linux, you might need to install additional system libraries if not already present:
-Bash
-
-sudo apt-get update && sudo apt-get install -y \
-    ca-certificates fonts-liberation libappindicator3-1 libasound2 libatk-bridge2.0-0 libatk1.0-0 \
-    libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgbm1 libgcc1 libglib2.0-0 \
-    libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 \
-    libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 \
-    libxrandr2 libxrender1 libxss1 libxtst6 lsb-release wget xdg-utils \
-    --no-install-recommends
-2.3. Frontend Setup (Vue.js with Vite)
-The frontend is a Vue.js single-page application.
-
-Navigate to your Vue frontend project directory:
-
-Bash
-
-cd path/to/your/whatsapp_business_app/vue-frontend/vue-whatsapp-frontend
-(Adjust vue-whatsapp-frontend if your Vue project folder has a different name).
-
-Install frontend dependencies:
-The package.json here lists all JavaScript libraries for the Vue app. Key dependencies include: vue, vue-router, pinia, socket.io-client, qrcode.vue. Development dependencies include vite, @vitejs/plugin-vue, tailwindcss, postcss, autoprefixer, @tailwindcss/postcss.
-Run the following command to install them:
-
-Bash
-
-npm install
-CRITICAL Frontend Configuration:
-You must set the backend URL in two frontend service files. Open them and replace the placeholder URL with your backend server's actual IP address and port:
-
-vue-frontend/vue-whatsapp-frontend/src/services/api.js:
-JavaScript
-
-const BASE_URL = 'http://YOUR_VM_PUBLIC_IP:3000'; // <--- SET THIS
-vue-frontend/vue-whatsapp-frontend/src/services/socket.js:
-JavaScript
-
-const BASE_URL = 'http://YOUR_VM_PUBLIC_IP:3000'; // <--- SET THIS
-For example, if your backend is running on the same VM and accessible via 43.134.142.240 on port 3000, it would be http://43.134.142.240:3000.
-3. Running the Application
-You need to run both the backend and frontend servers simultaneously, typically in separate terminal windows.
-
-3.1. Start the Backend Server
-Open a terminal.
-Navigate to the backend directory:
-Bash
-
-cd path/to/your/whatsapp_business_app/backend
-Start the server:
-Bash
-
 node server.js
-The backend should start, usually on port 3000. Look for a log like: Multi-session backend on http://localhost:3000.
-3.2. Start the Frontend Development Server
-Open a new terminal window or tab.
-Navigate to your Vue project directory:
-Bash
+```
+Backend typically on port 3000. Look for log:  
+`Multi-session backend on http://localhost:3000`
 
+### 3.2. Start the Frontend (Vite Dev Server)
+
+```bash
 cd path/to/your/whatsapp_business_app/vue-frontend/vue-whatsapp-frontend
-Start the Vite development server:
-Bash
-
 npm run dev -- --host
-The -- --host flag makes the Vite server accessible on your local network (and via your VM's public IP if firewall rules are set). Vite will typically start on a port like 5173 or 8787. The terminal will show you the URLs, e.g.:
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: http://YOUR_VM_LOCAL_IP:5173/
-3.3. Firewall Configuration
-Ensure the ports for both the backend (e.g., 3000) and the frontend Vite dev server (e.g., 5173 or 8787) are open in your VM's firewall. This includes:
+```
+`-- --host` makes Vite accessible on your LAN/public IP.  
+Vite default port: 5173 (or similar).  
+Terminal will show:
+```
+➜  Local:   http://localhost:5173/
+➜  Network: http://YOUR_VM_LOCAL_IP:5173/
+```
 
-Your cloud provider's firewall/security group rules.
-The local firewall on your VM (e.g., ufw on Ubuntu - sudo ufw allow <port_number>/tcp).
-3.4. Accessing the Application
-Open your web browser and navigate to your VM's public IP address followed by the port the Vite development server is running on (e.g., http://YOUR_VM_PUBLIC_IP:5173).
+### 3.3. Firewall Configuration
 
-Initial Steps in the App:
+Ensure ports for backend (e.g. 3000) and frontend (e.g. 5173) are open:
 
-Use the "Session Management" panel to "Add Device" by providing a unique session ID.
-If the session requires authentication, a QR code will appear. Scan it with your WhatsApp mobile app (Link a device).
-Once the session status shows "Client is READY!", you can select it and use the feature panels on the right (Send Text, Send Image, etc.).
-4. Building Frontend for Production
-When you are ready to deploy your frontend application:
+- **Cloud Provider**: Open ports in security group/firewall rules.
+- **VM Firewall (e.g. UFW on Ubuntu)**:
+  ```bash
+  sudo ufw allow 3000/tcp
+  sudo ufw allow 5173/tcp
+  ```
 
-Navigate to your Vue project directory:
+### 3.4. Accessing the App
 
-Bash
+Open a browser and go to:  
+`http://YOUR_VM_PUBLIC_IP:5173`
 
+---
+
+## 4. Initial Steps in the App
+
+1. Use "Session Management" panel to "Add Device" (provide any unique session ID).
+2. If authentication is needed, a QR code appears. Scan it with WhatsApp mobile app (“Link a device”).
+3. Once session status is **Client is READY!**, you can select it and use features (Send Text/Image/etc.).
+
+---
+
+## 5. Building Frontend for Production
+
+When ready to deploy:
+
+```bash
 cd path/to/your/whatsapp_business_app/vue-frontend/vue-whatsapp-frontend
-Run the build command:
-
-Bash
-
 npm run build
-This will create an optimized static build of your frontend in a dist folder.
+```
+This builds production-ready static files in `dist/`.
 
-Deploy the contents of this dist folder to any static web hosting service or configure a web server like Nginx or Apache to serve these files.
+**Deploy**: Serve contents of `dist/` via static hosting or a web server (Nginx, Apache, etc.).
 
-Important for Vue Router History Mode:
-If you are using createWebHistory in src/router/index.js (which gives clean URLs like /feature instead of /#/feature), your production web server must be configured to redirect all traffic for your app's paths to your index.html file. This allows Vue Router to handle the routing on the client-side. Search for "Vue Router history mode deployment [your server type]" for specific instructions (e.g., "Vue Router history mode Nginx"). If you switch to createWebHashHistory in your router, this server configuration is not needed.
+### Vue Router History Mode
 
-This README should provide a good guide for setting up and running your project.
+If using `createWebHistory` in `src/router/index.js` (clean URLs), your web server **must** redirect all app routes to `index.html`.  
+For Nginx/Apache setup, see ["Vue Router history mode deployment"](https://router.vuejs.org/guide/essentials/history-mode.html#example-server-configurations).  
+If you use `createWebHashHistory`, no server config is needed.
+
+---
+
+## License
+
+MIT (or as specified in your repository)
+
+---
+
+This README should provide a complete guide for setup, configuration, and running your multi-device WhatsApp web interface project.
