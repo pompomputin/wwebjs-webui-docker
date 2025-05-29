@@ -27,13 +27,13 @@ const users = [
     },
     {
         id: 2, // Make sure ID is unique
-        username: 'maw', // Your new username
-        passwordHash: '$2b$10$Vw8MFAauMIPSBcPdeOaSbu7Nv04gDJJgfK7B1oP6BaAOE7JdFVbSW' // The hash you copied in step 2
+        username: 'User1', // Your new username
+        passwordHash: bcrypt.hashSync(process.env.USER1_PASSWORD || '', 10)
     },
 	{
         id: 3,
-        username: 'anya',
-        passwordHash: bcrypt.hashSync(process.env.ANYA_PASSWORD || '', 10)
+        username: 'User2',
+        passwordHash: bcrypt.hashSync(process.env.USER2_PASSWORD || '', 10)
     }
     // You can add more users following this pattern
 ];
