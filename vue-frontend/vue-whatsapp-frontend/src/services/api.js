@@ -1,5 +1,5 @@
 // src/services/api.js
-const BASE_URL = 'http://68.183.233.123:3000'; // YOUR BACKEND URL
+const BASE_URL = 'https://backend.yourdomain.com'; // YOUR BACKEND URL
 
 /**
  * Generic request helper function.

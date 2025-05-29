@@ -16,18 +16,26 @@ app.use(cors());
 app.use(express.json());
 
 // --- Authentication Setup ---
-const JWT_SECRET = process.env.JWT_SECRET || '06363e3c7e6b757fad65655bc3ec2ac0ea7a15e7eee8abfa0233512d5f2ae8537234625566c086c97f599df8b2bb1944deff53c98752441c46968a54bac79a3d'; // Store this securely, e.g., in .env file
+const JWT_SECRET = process.env.JWT_SECRET || 'jwtsecret.env'; // Store this securely, e.g., in .env file
 
 // Sample user store (replace with a database in production)
 const users = [
     {
         id: 1,
         username: 'admin',
-        // Generate a hash for a password, e.g., 'password123'
-        // You can run: console.log(bcrypt.hashSync('password123', 10)); once to get the hash
-        // For example, if 'password123' hashes to '$2a$10$yourGeneratedHashPartHere...'
-        passwordHash: bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'admin123', 10) // Store hashed password
+        passwordHash: bcrypt.hashSync(process.env.ADMIN_PASSWORD || '', 10)
+    },
+    {
+        id: 2, // Make sure ID is unique
+        username: 'User1', // Your new username
+        passwordHash: bcrypt.hashSync(process.env.USER1_PASSWORD || '', 10)
+    },
+	{
+        id: 3,
+        username: 'User2',
+        passwordHash: bcrypt.hashSync(process.env.USER2_PASSWORD || '', 10)
     }
+    // You can add more users following this pattern
 ];
 
 // Middleware to authenticate JWT token
@@ -53,8 +61,18 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 const server = http.createServer(app);
+const frontendURL = 'https://zonagacor.xyz'; // YOUR FRONTEND DOMAIN
+const backendURL = 'https://backend.zonagacor.xyz'; // YOUR BACKEND DOMAIN
+
+app.use(cors({
+    origin: [frontendURL, backendURL] // Allow both for flexibility, or just frontendURL if backend API is not directly accessed
+}));
+// ...
 const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: {
+        origin: frontendURL, // Socket connections will originate from your frontend domain
+        methods: ["GET", "POST"]
+    }
 });
 
 // --- Socket.IO Authentication Middleware ---
