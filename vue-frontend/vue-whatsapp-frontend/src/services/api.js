@@ -1,5 +1,5 @@
 // src/services/api.js
-const BASE_URL = 'https://backend.zonagacor.xyz'; // YOUR BACKEND URL
+const BASE_URL = 'https://backend.yourdomain.com'; // YOUR BACKEND URL
 
 /**
  * Generic request helper function.
