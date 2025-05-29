@@ -16,7 +16,7 @@ app.use(cors());
 app.use(express.json());
 
 // --- Authentication Setup ---
-const JWT_SECRET = process.env.JWT_SECRET || '06363e3c7e6b757fad65655bc3ec2ac0ea7a15e7eee8abfa0233512d5f2ae8537234625566c086c97f599df8b2bb1944deff53c98752441c46968a54bac79a3d'; // Store this securely, e.g., in .env file
+const JWT_SECRET = process.env.JWT_SECRET || 'jwtsecret.env'; // Store this securely, e.g., in .env file
 
 // Sample user store (replace with a database in production)
 const users = [
