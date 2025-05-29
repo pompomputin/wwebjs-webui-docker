@@ -111,8 +111,8 @@ Follow these steps to set up and run the project on your local machine for devel
 ### 2.1. Clone the Repository
 
 ```bash
-git clone https://github.com/azhdaha-100kg/whatsapp-multi-device-app.git
-cd whatsapp-multi-device-app
+git clone https://github.com/azhdaha-100kg/wwebjs-webui.git
+cd wwebjs-webui
 ```
 
 ### 2.2. Backend Setup (Local Development)
@@ -234,12 +234,12 @@ This section outlines deploying the application to a production server using Ngi
 - **Clone or Update Your Application Code:**
   ```bash
   # If cloning for the first time on the server:
-  git clone https://github.com/azhdaha-100kg/whatsapp-multi-device-app.git
-  cd whatsapp-multi-device-app
+  git clone https://github.com/azhdaha-100kg/wwebjs-webui.git
+  cd wwebjs-webui
   # git checkout production # Switch to your production branch if you have one
 
   # If updating an existing deployment:
-  # cd /path/to/your/whatsapp-multi-device-app
+  # cd /path/to/your/wwebjs-webui
   # git checkout production
   # git pull origin production
   ```
