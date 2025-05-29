@@ -4,8 +4,8 @@ A web application to interact with multiple WhatsApp accounts simultaneously, bu
 **Now features user authentication for private access.**
 
 <div style="display: flex; gap: 20px; align-items: center;">
-  <img src="https://raw.githubusercontent.com/azhdaha-100kg/whatsapp-multi-device-web.ui/refs/heads/main/Login.png" alt="Login Screen" width="300" />
-  <img src="https://raw.githubusercontent.com/azhdaha-100kg/whatsapp-multi-device-web.ui/refs/heads/main/Dashboard.png" alt="Dashboard Screen" width="300" />
+  <img src="https://raw.githubusercontent.com/azhdaha-100kg/whatsapp-multi-device-web.ui/refs/heads/main/Login.png" alt="Login Screen" width="400" />
+  <img src="https://raw.githubusercontent.com/azhdaha-100kg/whatsapp-multi-device-web.ui/refs/heads/main/Dashboard.png" alt="Dashboard Screen" width="400" />
 </div>
         
 ## Features Overview
