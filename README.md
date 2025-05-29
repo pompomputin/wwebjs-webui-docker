@@ -3,8 +3,11 @@
 A web application to interact with multiple WhatsApp accounts simultaneously, built with a Node.js backend (using [`whatsapp-web.js`](https://github.com/pedroslopez/whatsapp-web.js)) and a Vue.js frontend.  
 **Now features user authentication for private access.**
 
----
-
+<div style="display: flex; gap: 20px; align-items: center;">
+  <img src="https://raw.githubusercontent.com/azhdaha-100kg/whatsapp-multi-device-web.ui/refs/heads/main/Login.png" alt="Login Screen" width="500" />
+  <img src="https://raw.githubusercontent.com/azhdaha-100kg/whatsapp-multi-device-web.ui/refs/heads/main/Dashboard.png" alt="Dashboard Screen" width="500" />
+</div>
+        
 ## Features Overview
 
 - **User Authentication**: Secure login with username/password, JWT-based session management.
