@@ -59,7 +59,7 @@
               </div>
             </nav>
 
-            <router-view /> 
+            <router-view :key="sessionStore.currentSelectedSessionId || 'no-session-active'" /> 
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 pt-6 border-t border-gray-300 dark:border-slate-600">  
                 <ChatsPanel />
@@ -80,37 +80,46 @@ import SessionManager from '../components/SessionManager.vue'; //
 import ChatsPanel from '../components/features/ChatsPanel.vue'; //
 import MessageLogPanel from '../components/features/MessageLogPanel.vue'; //
 import { useSessionStore } from '../stores/sessionStore'; //
-import { useAuthStore } from '@/stores/authStore';
+import { useAuthStore } from '@/stores/authStore'; //
 import { useRouter } from 'vue-router'; //
 import { watch } from 'vue'; //
 
 const sessionStore = useSessionStore(); //
-const authStore = useAuthStore(); // Initialize auth store
+const authStore = useAuthStore(); //
 const router = useRouter(); //
 
 function onSessionSelected(sessionId) {  //
-    if (router.currentRoute.value.name === 'dashboard' || !router.currentRoute.value.path.startsWith(`/`)) { //
+    // The router-view key change will handle component reset.
+    // We might still want to navigate to a default feature panel if none is active or if the current one is not suitable.
+    if (router.currentRoute.value.name === 'home' || router.currentRoute.value.name === 'dashboard') { //
         router.push({ name: 'sessionActiveHome' });  //
     }
 }
 function onNoSessionSelected() {  //
-    if (router.currentRoute.value.name !== 'dashboard') { //
-        router.push({ name: 'dashboard' });  //
+    // If no session is selected, we might want to clear the feature panel area or show a placeholder.
+    // The router-view key changing to 'no-session-active' will also cause a re-render.
+    // Navigate to a default "no session" state if not already on a generic dashboard page.
+    if (router.currentRoute.value.name !== 'home' && router.currentRoute.value.name !== 'dashboard') { //
+         router.push({ name: 'sessionActiveHome' }); // Or a specific placeholder route if 'sessionActiveHome' expects a session
     }
 }
 
-function handleLogout() {
-  authStore.logout(); // Call the logout action from your authStore
+function handleLogout() { //
+  authStore.logout(); //
 }
 
-watch(() => sessionStore.currentSelectedSessionId, (newSessionId) => {  //
+watch(() => sessionStore.currentSelectedSessionId, (newSessionId, oldSessionId) => {  //
     if (newSessionId) {  //
+        // When a session is selected (or changed), navigate to a sensible default feature if needed.
+        // The :key on router-view will handle the reset of the currently displayed feature panel.
         const currentRouteName = router.currentRoute.value.name;  //
-        if (currentRouteName === 'dashboard' || currentRouteName === 'home') {  //
+        if (currentRouteName === 'home' || currentRouteName === 'dashboard' || !newSessionId) {  // If on base path or no session was previously selected //
              router.push({ name: 'sessionActiveHome' }); //
         }
+        // If already on a feature panel, the key change will re-render it for the new session.
     } else {  //
-        // Optional: if (router.currentRoute.value.name !== 'dashboard' && router.currentRoute.value.name !== 'home') { router.push({ name: 'dashboard' }); }
+        // No session selected, navigate to a placeholder or base dashboard state.
+        router.push({ name: 'sessionActiveHome' }); // Or simply '/' if that's your intended placeholder
     }
 }, { immediate: true }); //
 </script>
