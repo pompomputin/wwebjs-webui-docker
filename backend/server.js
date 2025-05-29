@@ -23,11 +23,19 @@ const users = [
     {
         id: 1,
         username: 'admin',
-        // Generate a hash for a password, e.g., 'password123'
-        // You can run: console.log(bcrypt.hashSync('password123', 10)); once to get the hash
-        // For example, if 'password123' hashes to '$2a$10$yourGeneratedHashPartHere...'
-        passwordHash: bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'admin123', 10) // Store hashed password
+        passwordHash: bcrypt.hashSync(process.env.ADMIN_PASSWORD || '', 10)
+    },
+    {
+        id: 2, // Make sure ID is unique
+        username: 'maw', // Your new username
+        passwordHash: '$2b$10$Vw8MFAauMIPSBcPdeOaSbu7Nv04gDJJgfK7B1oP6BaAOE7JdFVbSW' // The hash you copied in step 2
+    },
+	{
+        id: 3,
+        username: 'anya',
+        passwordHash: bcrypt.hashSync(process.env.ANYA_PASSWORD || '', 10)
     }
+    // You can add more users following this pattern
 ];
 
 // Middleware to authenticate JWT token
@@ -53,8 +61,18 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 const server = http.createServer(app);
+const frontendURL = 'https://zonagacor.xyz'; // YOUR FRONTEND DOMAIN
+const backendURL = 'https://backend.zonagacor.xyz'; // YOUR BACKEND DOMAIN
+
+app.use(cors({
+    origin: [frontendURL, backendURL] // Allow both for flexibility, or just frontendURL if backend API is not directly accessed
+}));
+// ...
 const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: {
+        origin: frontendURL, // Socket connections will originate from your frontend domain
+        methods: ["GET", "POST"]
+    }
 });
 
 // --- Socket.IO Authentication Middleware ---

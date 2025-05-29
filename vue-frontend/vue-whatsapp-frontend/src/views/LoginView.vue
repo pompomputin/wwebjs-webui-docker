@@ -25,7 +25,7 @@
               autocomplete="username"
               required
               class="form-input"
-              placeholder="admin"
+              placeholder="username"
             />
           </div>
         </div>
@@ -41,7 +41,7 @@
               autocomplete="current-password"
               required
               class="form-input"
-              placeholder="••••••••"
+              placeholder="password"
             />
           </div>
         </div>
@@ -77,7 +77,7 @@
 import { ref } from 'vue';
 import { useAuthStore } from '@/stores/authStore'; // Adjust path if needed
 
-const username = ref('admin'); // Pre-fill for convenience during development
+const username = ref(''); // Pre-fill for convenience during development
 const password = ref('');
 const authStore = useAuthStore();
 

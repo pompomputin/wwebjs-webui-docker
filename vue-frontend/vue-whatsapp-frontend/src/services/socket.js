@@ -4,7 +4,7 @@ import { useSessionStore } from '../stores/sessionStore'; //
 import { useChatStore } from '../stores/chatStore'; //
 import { useAuthStore } from '@/stores/authStore';
 
-const BASE_URL = 'http://68.183.233.123:3000'; // Your backend URL
+const BASE_URL = 'https://backend.zonagacor.xyz'; // Your backend URL
 let socket = null;
 
 export function initializeSocket() {
