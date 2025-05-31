@@ -1,0 +1,24 @@
+# docker-compose.yml (simplified)
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: . # Build using the Dockerfile in the current (root) directory
+      dockerfile: Dockerfile
+    ports:
+      - "${APP_HOST_PORT:-3000}:${PORT:-3000}" # Exposes the combined app
+    volumes:
+      - .wwebjs_auth_data:/usr/src/app/backend/.wwebjs_auth # Persistent session data
+    env_file:
+      - ./.env
+    restart: unless-stopped
+    networks:
+      - whatsapp_net
+
+volumes:
+  .wwebjs_auth_data:
+
+networks:
+  whatsapp_net:
+    driver: bridge
