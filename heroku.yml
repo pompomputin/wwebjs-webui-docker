@@ -1,0 +1,14 @@
+build:
+  docker:
+    web: Dockerfile
+  # If you have any specific build arguments for your Dockerfile, you can add them here:
+  # config:
+  #   RAILS_ENV: development
+  #   FOO: bar
+run:
+  web: node backend/server.js
+# Optional: If you have a release phase script (e.g., for database migrations)
+# release:
+#   command:
+#     - ./release-tasks.sh
+#   image: web
