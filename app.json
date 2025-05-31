@@ -1,0 +1,46 @@
+{
+  "name": "Multi-Device WhatsApp Web UI",
+  "description": "A web application to interact with multiple WhatsApp accounts simultaneously.",
+  "repository": "https://github.com/azhdaha-100kg/wwebjs-webui-dockerized", // Replace with your actual public GitHub repo URL
+  "logo": "https://raw.githubusercontent.com/azhdaha-100kg/wwebjs-webui/main/Login.png", // Optional: URL to an image
+  "keywords": ["whatsapp", "node", "vue", "docker"],
+  "stack": "container", // Crucial for Docker deployments
+  "env": {
+    "NODE_ENV": {
+      "description": "Node environment",
+      "value": "production"
+    },
+    "JWT_SECRET": {
+      "description": "A strong, unique secret for JWT. Generate one (e.g., using a password generator).",
+      "generator": "secret" // Heroku can generate a random string
+    },
+    "ADMIN_PASSWORD": {
+      "description": "Secure password for the admin user.",
+      "value": "a_very_secure_admin_password_for_the_admin_user" // Users should change this
+    },
+    "USER1_PASSWORD": {
+      "description": "Secure password for User1.",
+      "value": "a_very_secure_password_for_user1", // Users should change this
+      "required": false
+    },
+    "USER2_PASSWORD": {
+      "description": "Secure password for User2.",
+      "value": "a_very_secure_password_for_user2", // Users should change this
+      "required": false
+    },
+    "CORS_ORIGIN": {
+      "description": "The URL your browser uses to access this application. Will be set to the Heroku app URL during setup.",
+      "value": "https://YOUR_APP_NAME_HERE.herokuapp.com" // This will be overridden by Heroku
+    }
+    // Heroku automatically provides PORT, so you don't usually need to define it here.
+  },
+  "formation": {
+    "web": {
+      "quantity": 1
+      // If your Dockerfile doesn't specify a CMD, or you want to override it,
+      // you can add a "command" here.
+      // "command": ["node", "backend/server.js"]
+    }
+  },
+  "addons": [] // Add any Heroku add-ons if needed (e.g., Redis for session persistence later)
+}
