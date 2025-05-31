@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require("socket.io");
-const cors = require('cors');
+const cors = require('cors'); // Make sure cors is required
 const { Client, LocalAuth, MessageMedia, Location } = require('whatsapp-web.js');
 const path = require('path');
 const multer = require('multer');
@@ -13,31 +13,11 @@ const bcrypt = require('bcryptjs');
 
 const app = express();
 
-// CORS Configuration
-const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:3000'; // Default if not set
-
-// Normalize all allowed origins by removing any trailing slashes
-const allowedOrigins = corsOriginEnv.split(',')
-  .map(origin => origin.trim().replace(/\/$/, '')); // Remove trailing slash
-
-console.log(`[CORS] Normalized Allowed origins: ${allowedOrigins.join(', ')}`);
-
+// CORS Configuration - MODIFIED TO ALLOW ALL ORIGINS
+console.log(`[CORS] Allowing all origins.`);
 app.use(cors({
-    origin: function (origin, callback) {
-        // Normalize incoming origin as well for a robust comparison
-        const normalizedIncomingOrigin = origin ? origin.replace(/\/$/, '') : null;
-
-        if (!normalizedIncomingOrigin || allowedOrigins.indexOf(normalizedIncomingOrigin) !== -1 || allowedOrigins.includes('*')) {
-            callback(null, true);
-        } else {
-            var msg = 'The CORS policy for this site does not allow access from the specified Origin: ' + origin +
-                      '. Allowed: ' + allowedOrigins.join(', ') +
-                      '. Normalized Incoming: ' + normalizedIncomingOrigin;
-            console.error(msg);
-            return callback(new Error(msg), false);
-        }
-    },
-    credentials: true
+    origin: '*', // Allow all origins
+    credentials: true // Allow cookies, authorization headers, etc.
 }));
 
 app.use(express.json());
@@ -59,11 +39,11 @@ const users = [
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
+    if (token == null) return res.sendStatus(401); // Unauthorized
     jwt.verify(token, JWT_SECRET, (err, user) => {
         if (err) {
             console.error('Token verification failed:', err.message);
-            return res.sendStatus(403);
+            return res.sendStatus(403); // Forbidden
         }
         req.user = user;
         next();
@@ -73,9 +53,11 @@ function authenticateToken(req, res, next) {
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 const server = http.createServer(app);
+
+// Socket.IO CORS Configuration - MODIFIED TO ALLOW ALL ORIGINS
 const io = new Server(server, {
     cors: {
-        origin: allowedOrigins, // Use the normalized list
+        origin: "*", // Allow all origins for Socket.IO
         methods: ["GET", "POST"],
         credentials: true
     }
@@ -109,7 +91,7 @@ function createWhatsappSession(sessionId) {
         authStrategy: new LocalAuth({ clientId: sessionId, dataPath: path.join(__dirname, '.wwebjs_auth') }),
         puppeteer: {
             headless: true,
-            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, // Use system Chromium if path is set
+            executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, // Use system Chromium if path is set in Dockerfile
             args: [
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
@@ -117,7 +99,7 @@ function createWhatsappSession(sessionId) {
                 '--disable-accelerated-2d-canvas',
                 '--no-first-run',
                 '--no-zygote',
-                '--single-process', // May help in resource-constrained environments
+                '--single-process', 
                 '--disable-gpu'
             ]
         },
@@ -133,7 +115,7 @@ function createWhatsappSession(sessionId) {
 
     client.on('authenticated', () => {
         console.log(`[${sessionId}] AUTHENTICATED`);
-        qrCodes[sessionId] = null; // Clear QR on successful authentication
+        qrCodes[sessionId] = null;
         io.to(sessionId).emit('authenticated', { sessionId });
         io.emit('status_update', { sessionId, message: 'Authenticated! Waiting for client to be ready...', isReady: false });
     });
@@ -147,26 +129,25 @@ function createWhatsappSession(sessionId) {
         if (sessions[sessionId]) {
             sessions[sessionId].destroy().catch(e => console.error(`[${sessionId}] Error destroying client after auth_failure: ${e.message}`));
             delete sessions[sessionId];
-            delete clientReadyStatus[sessionId]; // Ensure status is cleared
+            delete clientReadyStatus[sessionId];
         }
     });
 
     client.on('ready', () => {
         console.log(`[${sessionId}] WhatsApp client IS READY!`);
         clientReadyStatus[sessionId] = true;
-        qrCodes[sessionId] = null; // Ensure QR is cleared
+        qrCodes[sessionId] = null;
         io.to(sessionId).emit('ready', { sessionId });
         io.emit('status_update', { sessionId, message: 'Client is ready and connected!', isReady: true });
     });
 
     client.on('message', async msg => {
-        // console.log(`[${sessionId}] RX MSG From:${msg.from} Body:${msg.body}`);
         io.to(sessionId).emit('new_message', {
             sessionId,
             message: {
                 from: msg.from, to: msg.to, body: msg.body, timestamp: msg.timestamp,
                 id: msg.id.id, author: msg.author, isStatus: msg.isStatus,
-                isGroupMsg: msg.isGroupMsg || msg.isGroup, // Added msg.isGroup for compatibility
+                isGroupMsg: msg.isGroupMsg || msg.isGroup,
                 hasMedia: msg.hasMedia, type: msg.type
             }
         });
@@ -179,7 +160,6 @@ function createWhatsappSession(sessionId) {
         io.to(sessionId).emit('disconnected', { sessionId, reason });
         io.emit('status_update', { sessionId, message: `Client disconnected: ${reason}. Session removed.`, isReady: false });
         if (sessions[sessionId]) {
-            // No need to call destroy, 'disconnected' means it's already gone or will be.
             delete sessions[sessionId];
             delete clientReadyStatus[sessionId];
         }
@@ -189,14 +169,14 @@ function createWhatsappSession(sessionId) {
         console.error(`[${sessionId}] Initialization ERROR: ${err.message}`);
         io.to(sessionId).emit('init_error', { sessionId, error: err.message });
         io.emit('status_update', { sessionId, message: `Initialization Error: ${err.message}`, isReady: false });
-        delete sessions[sessionId]; // Clean up if init fails
+        delete sessions[sessionId];
         delete qrCodes[sessionId];
         delete clientReadyStatus[sessionId];
     });
 
     sessions[sessionId] = client;
-    clientReadyStatus[sessionId] = false; // Initial status
-    qrCodes[sessionId] = null; // Initial QR status
+    clientReadyStatus[sessionId] = false;
+    qrCodes[sessionId] = null;
     return client;
 }
 
@@ -314,25 +294,19 @@ io.on('connection', (socket) => {
 // --- SPA Fallback Route ---
 // This MUST be the VERY LAST route handler for GET requests
 app.get('*', (req, res) => {
-  // Debug log to see what path triggers this fallback
   console.log(`[DEBUG] SPA Fallback triggered for path: ${req.path}`);
-
-  // Check if it's likely an API call or a static file request
-  if (req.path.startsWith('/api/') || // Generic API prefix
-      req.path.startsWith('/session/') || // Specific API prefix
-      req.path.startsWith('/auth/') || // Specific API prefix
-      req.path.startsWith('/socket.io/') || // Socket.IO handles its own paths
-      req.path.includes('.')) { // Common check for files with extensions (e.g., .css, .js, .png)
-
+  if (req.path.startsWith('/api/') ||
+      req.path.startsWith('/session/') ||
+      req.path.startsWith('/auth/') ||
+      req.path.startsWith('/socket.io/') ||
+      req.path.includes('.')) {
     console.log(`[DEBUG] SPA Fallback: Path "${req.path}" considered API/file, sending 404.`);
     return res.status(404).send('Resource not found.');
   }
-
-  // If it's not an API call or a static file, serve index.html for SPA routing
   console.log(`[DEBUG] SPA Fallback: Serving index.html for path "${req.path}".`);
   res.sendFile(path.join(frontendDistPath, 'index.html'), (err) => {
     if (err) {
-      if (err.status === 404) { // Common case if index.html itself is missing
+      if (err.status === 404) {
         console.error(`[CRITICAL] SPA Fallback: frontend_build/index.html NOT FOUND at ${frontendDistPath}. Check Dockerfile COPY and frontend build.`);
         res.status(404).send('Application entry point (index.html) not found.');
       } else {
