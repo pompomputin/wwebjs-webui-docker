@@ -11,6 +11,7 @@ import GetContactInfoPanel from '../components/features/GetContactInfoPanel.vue'
 import SetStatusPanel from '../components/features/SetStatusPanel.vue'; //
 import BulkSendPanel from '../components/features/BulkSendPanel.vue'; //
 import SessionActivePlaceholder from '../components/features/SessionActivePlaceholder.vue'; //
+import BulkCheckNumbersPanel from '../components/features/BulkCheckNumbersPanel.vue'; //
 
 // Import the auth store for navigation guards
 import { useAuthStore } from '@/stores/authStore';
@@ -62,6 +63,11 @@ const routes = [
         path: 'bulksend', //
         name: 'bulkSend', //
         component: BulkSendPanel, //
+      },
+      {
+        path: 'bulkcheck', // <-- NEW ROUTE PATH
+        name: 'bulkCheckNumbers', // <-- NEW ROUTE NAME
+        component: BulkCheckNumbersPanel, // <-- USE NEW COMPONENT
       }
     ]
   },

@@ -50,20 +50,29 @@
             <nav id="featureMenu" class="mb-5 pb-3 border-b border-gray-200 dark:border-slate-700">
               <h3 class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Features</h3>
               <div class="flex flex-wrap gap-2">
-                <router-link :to="{ name: 'sendText' }" active-class="active-feature" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Send Text</router-link>
-                <router-link :to="{ name: 'sendImage' }" active-class="active-feature" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Send Image</router-link>
-                <router-link :to="{ name: 'sendLocation' }" active-class="active-feature" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Send Location</router-link>
-                <router-link :to="{ name: 'contactInfo' }" active-class="active-feature" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Get Contact Info</router-link>
-                <router-link :to="{ name: 'setStatus' }" active-class="active-feature" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Set Status</router-link> 
-                <router-link :to="{ name: 'bulkSend' }" active-class="active-feature" class="feature-link text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm">Bulk Send</router-link>
+                <router-link :to="{ name: 'sendText' }" active-class="active-feature" class="feature-link">Send Text</router-link>
+                <router-link :to="{ name: 'sendImage' }" active-class="active-feature" class="feature-link">Send Image</router-link>
+                <router-link :to="{ name: 'sendLocation' }" active-class="active-feature" class="feature-link">Send Location</router-link>
+                <router-link :to="{ name: 'contactInfo' }" active-class="active-feature" class="feature-link">Get Contact Info</router-link>
+                <router-link :to="{ name: 'setStatus' }" active-class="active-feature" class="feature-link">Set Status</router-link> 
+                <router-link :to="{ name: 'bulkSend' }" active-class="active-feature" class="feature-link">Bulk Send</router-link>
+                <router-link :to="{ name: 'bulkCheckNumbers' }" active-class="active-feature" class="feature-link">
+                  Bulk Check Numbers
+                </router-link>
               </div>
             </nav>
 
             <router-view :key="sessionStore.currentSelectedSessionId || 'no-session-active'" /> 
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 pt-6 border-t border-gray-300 dark:border-slate-600">  
-                <ChatsPanel />
-                <MessageLogPanel />
+                <template v-if="bulkCheckStore.isCheckingActive && $route.name === 'bulkCheckNumbers'">
+                  <RegisteredNumbersLogDisplay />
+                  <NonExistingNumbersLogDisplay />
+                </template>
+                <template v-else>
+                  <ChatsPanel />
+                  <MessageLogPanel />
+                </template>
             </div>
         </div>
 
@@ -76,61 +85,83 @@
 </template>
 
 <script setup>
-import SessionManager from '../components/SessionManager.vue'; //
-import ChatsPanel from '../components/features/ChatsPanel.vue'; //
-import MessageLogPanel from '../components/features/MessageLogPanel.vue'; //
-import { useSessionStore } from '../stores/sessionStore'; //
-import { useAuthStore } from '@/stores/authStore'; //
-import { useRouter } from 'vue-router'; //
-import { watch } from 'vue'; //
+import SessionManager from '../components/SessionManager.vue'; 
+import ChatsPanel from '../components/features/ChatsPanel.vue'; 
+import MessageLogPanel from '../components/features/MessageLogPanel.vue'; 
+import RegisteredNumbersLogDisplay from '../components/features/RegisteredNumbersLogDisplay.vue'; // <-- IMPORT
+import NonExistingNumbersLogDisplay from '../components/features/NonExistingNumbersLogDisplay.vue'; // <-- IMPORT
+import { useSessionStore } from '../stores/sessionStore'; 
+import { useAuthStore } from '@/stores/authStore'; 
+import { useBulkCheckStore } from '@/stores/bulkCheckStore'; // <-- IMPORT
+import { useRouter, useRoute } from 'vue-router'; // <-- IMPORT useRoute
+import { watch } from 'vue'; 
 
-const sessionStore = useSessionStore(); //
-const authStore = useAuthStore(); //
-const router = useRouter(); //
+const sessionStore = useSessionStore(); 
+const authStore = useAuthStore(); 
+const bulkCheckStore = useBulkCheckStore(); // <-- USE STORE
+const router = useRouter(); 
+const route = useRoute(); // <-- GET CURRENT ROUTE
 
-function onSessionSelected(sessionId) {  //
-    // The router-view key change will handle component reset.
-    // We might still want to navigate to a default feature panel if none is active or if the current one is not suitable.
-    if (router.currentRoute.value.name === 'home' || router.currentRoute.value.name === 'dashboard') { //
-        router.push({ name: 'sessionActiveHome' });  //
+function onSessionSelected(sessionId) {  
+    if (router.currentRoute.value.name === 'home' || router.currentRoute.value.name === 'dashboard') { 
+        router.push({ name: 'sessionActiveHome' });  
+    }
+    // When a session is selected, ensure bulk check results are cleared unless we are on the bulk check page
+    if (route.name !== 'bulkCheckNumbers') {
+      bulkCheckStore.clearBulkCheckResults();
     }
 }
-function onNoSessionSelected() {  //
-    // If no session is selected, we might want to clear the feature panel area or show a placeholder.
-    // The router-view key changing to 'no-session-active' will also cause a re-render.
-    // Navigate to a default "no session" state if not already on a generic dashboard page.
-    if (router.currentRoute.value.name !== 'home' && router.currentRoute.value.name !== 'dashboard') { //
-         router.push({ name: 'sessionActiveHome' }); // Or a specific placeholder route if 'sessionActiveHome' expects a session
+function onNoSessionSelected() {  
+    if (router.currentRoute.value.name !== 'home' && router.currentRoute.value.name !== 'dashboard') { 
+         router.push({ name: 'sessionActiveHome' }); 
     }
+    bulkCheckStore.clearBulkCheckResults(); // Clear results if no session
 }
 
-function handleLogout() { //
-  authStore.logout(); //
+function handleLogout() { 
+  authStore.logout(); 
 }
 
-watch(() => sessionStore.currentSelectedSessionId, (newSessionId, oldSessionId) => {  //
-    if (newSessionId) {  //
-        // When a session is selected (or changed), navigate to a sensible default feature if needed.
-        // The :key on router-view will handle the reset of the currently displayed feature panel.
-        const currentRouteName = router.currentRoute.value.name;  //
-        if (currentRouteName === 'home' || currentRouteName === 'dashboard' || !newSessionId) {  // If on base path or no session was previously selected //
-             router.push({ name: 'sessionActiveHome' }); //
+watch(() => sessionStore.currentSelectedSessionId, (newSessionId, oldSessionId) => {  
+    if (newSessionId) {  
+        const currentRouteName = router.currentRoute.value.name;  
+        if (currentRouteName === 'home' || currentRouteName === 'dashboard' || !newSessionId) {  
+             router.push({ name: 'sessionActiveHome' }); 
         }
-        // If already on a feature panel, the key change will re-render it for the new session.
-    } else {  //
-        // No session selected, navigate to a placeholder or base dashboard state.
-        router.push({ name: 'sessionActiveHome' }); // Or simply '/' if that's your intended placeholder
+         // If not on bulkCheckNumbers, clear its specific logs
+        if (route.name !== 'bulkCheckNumbers') {
+          bulkCheckStore.setIsCheckingActive(false); // No longer actively displaying bulk check results
+        }
+
+    } else {  
+        router.push({ name: 'sessionActiveHome' }); 
+        bulkCheckStore.clearBulkCheckResults(); // Clear results if no session
     }
-}, { immediate: true }); //
+}, { immediate: true }); 
+
+// Watch the route to clear bulk check status when navigating away from the bulk check panel
+watch(() => route.name, (newRouteName) => {
+  if (newRouteName !== 'bulkCheckNumbers') {
+    bulkCheckStore.setIsCheckingActive(false);
+    // Optionally clear data too: bulkCheckStore.clearBulkCheckResults();
+  } else {
+    bulkCheckStore.setIsCheckingActive(true); // Re-activate if navigating to it
+  }
+});
 </script>
 
-<style>
-/* Your existing styles for DashboardView.vue */
+<style scoped> /* Changed from global to scoped */
 .active-feature {
-  /* Example active class styling - Tailwind */
   @apply bg-indigo-600 text-white dark:bg-indigo-500 dark:text-white shadow-md;
 }
 .feature-link {
-  /* Ensure consistent styling for links */
+  /* Copied from your existing feature links in the template for consistency */
+  @apply text-sm px-3.5 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shadow-sm;
+}
+
+/* Ensure panel containers have a min-height or allow content to dictate height */
+.panel-container-desktop {
+  /* max-height: calc(100vh - 170px); /* from your global style.css, adjust if needed */
+  /* Consider min-height too for consistency when content is small */
 }
 </style>
