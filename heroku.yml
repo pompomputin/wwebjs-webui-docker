@@ -6,7 +6,7 @@ build:
   #   RAILS_ENV: development
   #   FOO: bar
 run:
-  web: node backend/server.js
+  web: node server.js # <-- This is the corrected line
 # Optional: If you have a release phase script (e.g., for database migrations)
 # release:
 #   command:
