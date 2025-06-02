@@ -1,0 +1,42 @@
+{
+  "name": "Multi-Device WhatsApp Web UI",
+  "description": "A web application to interact with multiple WhatsApp accounts simultaneously.",
+  "repository": "https://github.com/azhdaha-100kg/wwebjs-webui-dockerized",
+  "logo": "https://raw.githubusercontent.com/azhdaha-100kg/wwebjs-webui/main/Login.png",
+  "keywords": ["whatsapp", "node", "vue", "docker"],
+  "stack": "container",
+  "env": {
+    "NODE_ENV": {
+      "description": "Node environment.",
+      "value": "production"
+    },
+    "JWT_SECRET": {
+      "description": "A strong, unique secret for JWT. Heroku will generate one if you leave the value field blank during setup, or you can provide your own.",
+      "generator": "secret"
+    },
+    "ADMIN_PASSWORD": {
+      "description": "Secure password for the default 'admin' user. You will be prompted to set this during Heroku Button setup.",
+      "value": ""
+    },
+    "USER1_PASSWORD": {
+      "description": "Secure password for 'User1'. You can set this during Heroku Button setup. (Optional)",
+      "value": "",
+      "required": false
+    },
+    "USER2_PASSWORD": {
+      "description": "Secure password for 'User2'. You can set this during Heroku Button setup. (Optional)",
+      "value": "",
+      "required": false
+    },
+    "CORS_ORIGIN": {
+      "description": "The URL your browser uses to access this application. This will be automatically set to your Heroku app's URL (e.g., https://your-app-name.herokuapp.com) by Heroku during the setup process if left blank, or you can pre-fill it if you know your app name.",
+      "value": ""
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1
+    }
+  },
+  "addons": []
+}

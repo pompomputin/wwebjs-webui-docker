@@ -7,6 +7,8 @@ A web application to interact with multiple WhatsApp accounts simultaneously, bu
   <img src="https://raw.githubusercontent.com/azhdaha-100kg/wwebjs-webui/main/Dashboard.png" alt="Dashboard Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
 </div>
 
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/azhdaha-100kg/wwebjs-webui-dockerized)
+
 ---
 
 ## Table of Contents
