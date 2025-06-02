@@ -5,6 +5,19 @@
     </h2>
 
     <div class="space-y-6">
+      <div class="mb-4">
+        <label for="countryCodeSelect" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+          Default Country Code (for numbers without '+' or national prefix like '0')
+        </label>
+        <select id="countryCodeSelect" v-model="selectedCountryCode" class="form-select w-full md:w-1/2">
+          <option v-for="country in countries" :key="country.code" :value="country.code">
+            {{ country.name }} {{ country.code ? `(+${country.code})` : '' }}
+          </option>
+        </select>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          Select a country if your numbers list uses local formats (e.g., starting with '0' or without any country code).
+        </p>
+      </div>
       <div>
         <label for="numbersToCheckBulk" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
           Numbers to Check (comma/newline separated)
@@ -14,7 +27,7 @@
           v-model="numbersInput"
           rows="8"
           class="form-textarea custom-scrollbar"
-          placeholder="e.g., 1234567890, 0987654321&#10;5551234567"
+          placeholder="e.g., +14155552671, 08123456789 (select country)&#10;8123456789 (select country)"
           :disabled="isChecking"
         ></textarea>
         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Enter phone numbers separated by commas or newlines.</p>
@@ -24,7 +37,7 @@
         <button
           @click="performBulkCheck"
           :disabled="isChecking || !sessionStore.selectedSessionData?.isReady || !numbersInput.trim()"
-          class="btn btn-teal w-full sm:w-auto flex-grow sm:flex-grow-0" 
+          class="btn btn-teal w-full sm:w-auto flex-grow sm:flex-grow-0"
         >
           <span v-if="isChecking">
             <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -45,14 +58,14 @@
           Stop Check
         </button>
       </div>
-       <div class="mt-2">
+        <div class="mt-2">
           <p v-if="!sessionStore.selectedSessionData?.isReady && sessionStore.currentSelectedSessionId" class="text-sm text-orange-500 dark:text-orange-400">
             Selected session ({{ sessionStore.currentSelectedSessionId }}) is not ready.
           </p>
           <p v-else-if="!sessionStore.currentSelectedSessionId" class="text-sm text-orange-500 dark:text-orange-400">
             No session selected. Please select or initialize a session first.
           </p>
-       </div>
+        </div>
     </div>
       <p v-if="overallStatus" class="mt-4 text-sm text-slate-600 dark:text-slate-300">{{ overallStatus }}</p>
     </div>
@@ -71,21 +84,35 @@ const numbersInput = ref('');
 const isChecking = ref(false);
 const overallStatus = ref('');
 const stopRequested = ref(false);
-const resumeIndex = ref(0); 
+const resumeIndex = ref(0);
+
+// START: Country code data and selection
+const countries = ref([
+  { name: 'No Default Country Code (numbers should be international, e.g., +1... or 62...)', code: '' },
+  { name: 'Indonesia (ID)', code: '62' },
+  { name: 'United States (US)', code: '1' },
+  { name: 'United Kingdom (GB)', code: '44' },
+  { name: 'India (IN)', code: '91' },
+  { name: 'Brazil (BR)', code: '55' },
+  // Add more countries as needed. You can find comprehensive lists online.
+]);
+const selectedCountryCode = ref(''); // Default to no country code, meaning numbers should be international or will use basic cleaning
+// END: Country code data and selection
 
 const parseNumbers = (input) => {
   if (!input) return [];
+  // Keep original input mostly, backend will normalize with country code context
   return input
-    .split(/[,;\n]+/)
-    .map(num => num.trim().replace(/\D/g, '')) 
-    .filter(num => num.length > 0);
+    .split(/[,;\n]+/) // Split by comma, semicolon, or newline
+    .map(num => num.trim()) // Trim whitespace
+    .filter(num => num.length > 0); // Remove empty entries
 };
 
 watch(numbersInput, (newVal, oldVal) => {
-  if (newVal.trim() !== oldVal.trim() && !isChecking.value) { 
+  if (newVal.trim() !== oldVal.trim() && !isChecking.value) {
     resumeIndex.value = 0;
     overallStatus.value = 'Number list changed. Any new check will start from the beginning.';
-    bulkCheckStore.clearBulkCheckResults(); 
+    bulkCheckStore.clearBulkCheckResults();
     console.log('Numbers input changed, resumeIndex reset.');
   }
 });
@@ -103,7 +130,7 @@ const performBulkCheck = async () => {
   const allParsedNumbers = parseNumbers(numbersInput.value);
   if (allParsedNumbers.length === 0) {
     overallStatus.value = 'No valid numbers to check.';
-    resumeIndex.value = 0; 
+    resumeIndex.value = 0;
     bulkCheckStore.clearBulkCheckResults();
     return;
   }
@@ -112,7 +139,7 @@ const performBulkCheck = async () => {
   stopRequested.value = false;
 
   if (resumeIndex.value === 0) {
-    bulkCheckStore.startNewBulkCheck(); 
+    bulkCheckStore.startNewBulkCheck();
     overallStatus.value = `Starting new check for ${allParsedNumbers.length} numbers...`;
   } else {
     overallStatus.value = `Resuming check from number ${resumeIndex.value + 1} of ${allParsedNumbers.length}...`;
@@ -123,49 +150,61 @@ const performBulkCheck = async () => {
 
     if (stopRequested.value) {
       overallStatus.value = `Check paused. Processed ${bulkCheckStore.registeredNumbers.length + bulkCheckStore.unregisteredNumbers.length} of ${allParsedNumbers.length}. Ready to resume from number ${i + 1}.`;
-      resumeIndex.value = i; 
-      break; 
+      resumeIndex.value = i;
+      break;
     }
 
-    if (!sessionStore.currentSelectedSessionId) { 
+    if (!sessionStore.currentSelectedSessionId) {
       overallStatus.value = 'Session changed or removed during checks. Aborting.';
-      resumeIndex.value = i; 
-      break; 
+      resumeIndex.value = i;
+      break;
     }
 
     let currentStatusUpdate = `Checking ${i + 1}/${allParsedNumbers.length}: ${number}...`;
     overallStatus.value = currentStatusUpdate;
 
     try {
-      const response = await checkWhatsAppNumberApi(sessionStore.currentSelectedSessionId, number);
+      // Pass the selectedCountryCode.value to the API call
+      const response = await checkWhatsAppNumberApi(
+        sessionStore.currentSelectedSessionId,
+        number,
+        selectedCountryCode.value // Pass the selected code
+      );
       
-      if (stopRequested.value && i < allParsedNumbers.length -1 ) {
-         resumeIndex.value = i;
-      } else {
-        if (response.success && response.isRegistered) {
-          bulkCheckStore.addRegisteredNumber(number); 
-          overallStatus.value = `${currentStatusUpdate} Registered.`;
-        } else if (response.success && !response.isRegistered) {
-          bulkCheckStore.addUnregisteredNumber({ number, reason: 'Not registered' }); 
-          overallStatus.value = `${currentStatusUpdate} Not Registered.`;
-        } else { 
-          bulkCheckStore.addUnregisteredNumber({ number, reason: response.error || 'Failed to check (API error)' });
-          overallStatus.value = `${currentStatusUpdate} Error: ${response.error || 'API Error'}.`;
-        }
+      const displayNum = response.numId ? response.numId.replace('@c.us', '') : number;
+
+      if (stopRequested.value && i < allParsedNumbers.length -1 ) { 
+           resumeIndex.value = i; 
+       } else if (stopRequested.value && i === allParsedNumbers.length -1) { 
+           resumeIndex.value = 0; 
+           overallStatus.value = `Check stopped after processing all numbers. Processed ${bulkCheckStore.registeredNumbers.length + bulkCheckStore.unregisteredNumbers.length} of ${allParsedNumbers.length}.`;
+      } else { 
+          if (response.success && response.isRegistered) {
+            bulkCheckStore.addRegisteredNumber(displayNum); 
+            overallStatus.value = `${currentStatusUpdate} Registered (${displayNum}).`;
+          } else if (response.success && !response.isRegistered) {
+            bulkCheckStore.addUnregisteredNumber({ number: displayNum, reason: 'Not registered' });
+            overallStatus.value = `${currentStatusUpdate} Not Registered (${displayNum}).`;
+          } else {
+            bulkCheckStore.addUnregisteredNumber({ number, reason: response.error || 'Failed to check (API error)' });
+            overallStatus.value = `${currentStatusUpdate} Error: ${response.error || 'API Error'}.`;
+          }
       }
-    } catch (error) { 
-       if (!stopRequested.value) {
-        bulkCheckStore.addUnregisteredNumber({ number, reason: error.message || 'Network error' });
-        overallStatus.value = `${currentStatusUpdate} Error: ${error.message || 'Network Error'}.`;
-      }
+    } catch (error) {
+        if (!stopRequested.value) {
+         bulkCheckStore.addUnregisteredNumber({ number, reason: error.message || 'Network error' });
+         overallStatus.value = `${currentStatusUpdate} Error: ${error.message || 'Network Error'}.`;
+       } else {
+          resumeIndex.value = i;
+       }
     }
   } 
 
-  isChecking.value = false; 
+  isChecking.value = false;
   
-  if (!stopRequested.value) { 
+  if (!stopRequested.value) {
     overallStatus.value = `Bulk check complete. Processed ${allParsedNumbers.length} numbers.`;
-    resumeIndex.value = 0; 
+    resumeIndex.value = 0;
   }
   
   bulkCheckStore.setBulkCheckComplete();
@@ -187,5 +226,6 @@ onUnmounted(() => {
 <style scoped>
 /* Add any specific styles for this panel if needed */
 .feature-panel {
+  /* You might want to ensure it can accommodate the new dropdown gracefully */
 }
 </style>

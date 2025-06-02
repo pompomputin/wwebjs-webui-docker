@@ -36,10 +36,6 @@ async function request(endpoint, options = {}, isLogin = false) {
 
         if (response.status === 401 && !isLogin) {
             console.error('API Request Unauthorized (401). Token might be invalid or expired.');
-            // Consider triggering logout via authStore or event bus for a better UX
-            // import { useAuthStore } from '@/stores/authStore'; // This would create circular dependency if used directly here.
-            // Event bus or direct window event might be better for decoupling.
-            // For now, we just return error; frontend components should handle this.
             return { success: false, error: 'Unauthorized. Please login again.', status: response.status };
         }
 
@@ -73,7 +69,7 @@ export const loginApi = (credentials) => {
     return request('/auth/login', {
         method: 'POST',
         body: JSON.stringify(credentials),
-    }, true); // Pass true for isLogin to skip adding Auth header
+    }, true); 
 };
 
 
@@ -90,20 +86,32 @@ export const removeSessionApi = (sessionId) => {
     return request(`/session/remove/${sessionId}`, { method: 'POST' });
 };
 
-// --- New function to check WhatsApp Number ---
-export const checkWhatsAppNumberApi = (sessionId, numberToCheck) => {
-    return request(`/session/is-registered/${sessionId}/${encodeURIComponent(numberToCheck)}`, { method: 'GET' });
+// --- Updated function to check WhatsApp Number ---
+export const checkWhatsAppNumberApi = (sessionId, numberToCheck, countryCode) => { // Added countryCode parameter
+    let endpoint = `/session/is-registered/${sessionId}/${encodeURIComponent(numberToCheck)}`;
+    // Only add countryCode query parameter if it's selected and not an empty string
+    if (countryCode && String(countryCode).trim() !== "") {
+        endpoint += `?countryCode=${encodeURIComponent(countryCode)}`;
+    }
+    return request(endpoint, { method: 'GET' });
 };
 
 // --- Feature-Specific API Calls ---
-export const sendMessageApi = (sessionId, recipient, message) => {
+// Note: If you want to apply country code normalization to sending messages,
+// you'll need to modify sendMessageApi and other relevant functions similarly,
+// likely by adding countryCode to their parameters and sending it in the request body.
+
+export const sendMessageApi = (sessionId, recipient, message, countryCode) => { // Added countryCode
     return request(`/session/send-message/${sessionId}`, {
         method: 'POST',
-        body: JSON.stringify({ number: recipient, message: message }),
+        body: JSON.stringify({ number: recipient, message: message, countryCode: countryCode }), // Send countryCode in body
     });
 };
 
 export const sendImageApi = (sessionId, formData) => {
+    // If sending images also needs number normalization with country code for the 'number' field in FormData,
+    // you'll need to append countryCode to formData before calling this.
+    // Example: formData.append('countryCode', selectedCountryCode);
     return request(`/session/send-image/${sessionId}`, {
         method: 'POST',
         body: formData
@@ -114,18 +122,23 @@ export const getChatsApi = (sessionId) => {
     return request(`/session/chats/${sessionId}`);
 };
 
-export const getContactInfoApi = (sessionId, contactId) => {
-    return request(`/session/contact-info/${sessionId}/${encodeURIComponent(contactId)}`);
+export const getContactInfoApi = (sessionId, contactId, countryCode) => { // Added countryCode
+    let endpoint = `/session/contact-info/${sessionId}/${encodeURIComponent(contactId)}`;
+     if (countryCode && String(countryCode).trim() !== "") {
+        endpoint += `?countryCode=${encodeURIComponent(countryCode)}`;
+    }
+    return request(endpoint);
 };
 
-export const sendLocationApi = (sessionId, recipient, latitude, longitude, description) => {
+export const sendLocationApi = (sessionId, recipient, latitude, longitude, description, countryCode) => { // Added countryCode
     return request(`/session/send-location/${sessionId}`, {
         method: 'POST',
         body: JSON.stringify({
             number: recipient,
             latitude: parseFloat(latitude),
             longitude: parseFloat(longitude),
-            description: description
+            description: description,
+            countryCode: countryCode // Send countryCode in body
         }),
     });
 };
