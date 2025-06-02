@@ -7,8 +7,8 @@ A web application to interact with multiple WhatsApp accounts simultaneously, bu
 ---
 # Preview
 <div align="left" style="display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
-  <img src="https://raw.githubusercontent.com/pompomputin/wwebjs-webui-docker/refs/heads/main/Multi-Device-WhatsApp-App-login.png" alt="Login Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
-  <img src="https://raw.githubusercontent.com/pompomputin/wwebjs-webui-docker/refs/heads/main/Multi-Device-WhatsApp-App.png" alt="Dashboard Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
+  <img src="https://raw.githubusercontent.com/pompomputin/wwebjs-webui-docker/refs/heads/main/Login.png" alt="Login Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
+  <img src="https://raw.githubusercontent.com/pompomputin/wwebjs-webui-docker/refs/heads/main/Dashboard.png" alt="Dashboard Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
 </div>
 
 ---
