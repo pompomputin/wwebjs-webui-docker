@@ -5,7 +5,7 @@
 
 # Session Data (very important for privacy and to avoid large commits)
 /backend/.wwebjs_auth/
-
+.wwebjs_auth_data
 # Build output
 /vue-frontend/vue-whatsapp-frontend/dist
 /vue-frontend/vue-whatsapp-frontend/.output
