@@ -28,9 +28,9 @@
       "value": "",
       "required": false
     },
-    "CORS_ORIGIN": { false
+    "CORS_ORIGIN": {
       "description": "The URL your browser uses to access this application. This will be automatically set to your Heroku app's URL (e.g., https://your-app-name.herokuapp.com) by Heroku during the setup process if left blank, or you can pre-fill it if you know your app name.",
-      "value": ""
+      "value": "",
       "required": false
     }
   },
