@@ -2,15 +2,16 @@
 
 A web application to interact with multiple WhatsApp accounts simultaneously, built with a Node.js backend (using `whatsapp-web.js`) and a Vue.js frontend. This version is configured for easy deployment using Docker, where the backend serves the frontend application.
 
-<div align="center" style="display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
-  <img src="https://raw.githubusercontent.com/pompomputin/wwebjs-webui-docker/main/Login.png" alt="Login Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
-  <img src="https://raw.githubusercontent.com/pompomputin/wwebjs-webui-docker/main/Dashboard.png" alt="Dashboard Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
+# Depoloy to heroku
+  [![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/pompomputin/wwebjs-webui-docker)
+---
+# Preview
+<div align="left" style="display: flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
+  <img src="https://raw.githubusercontent.com/pompomputin/wwebjs-webui-docker/refs/heads/main/Multi-Device-WhatsApp-App-login.png" alt="Login Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
+  <img src="https://raw.githubusercontent.com/pompomputin/wwebjs-webui-docker/refs/heads/main/Multi-Device-WhatsApp-App.png" alt="Dashboard Screen" width="400" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin: 5px;" />
 </div>
 
-[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/pompomputin/wwebjs-webui-docker)
-
 ---
-
 ## Table of Contents
 
 - [Features Overview](#features-overview)
