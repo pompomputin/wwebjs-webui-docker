@@ -24,7 +24,7 @@
         <button
           @click="performBulkCheck"
           :disabled="isChecking || !sessionStore.selectedSessionData?.isReady || !numbersInput.trim()"
-          class="btn btn-teal w-full sm:w-auto flex-grow sm:flex-grow-0"
+          class="btn btn-teal w-full sm:w-auto flex-grow sm:flex-grow-0" 
         >
           <span v-if="isChecking">
             <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -33,13 +33,14 @@
             </svg>
             Checking...
           </span>
+          <span v-else-if="resumeIndex > 0 && !isChecking">Resume Check (from #{{ resumeIndex + 1 }})</span>
           <span v-else>Start Number Check</span>
         </button>
 
         <button
           v-if="isChecking"
           @click="handleStopCheck"
-          class="btn btn-red w-full sm:w-auto flex-grow sm:flex-grow-0"
+          class="btn w-full sm:w-auto flex-grow sm:flex-grow-0 bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-700 dark:hover:bg-red-800 text-white"
         >
           Stop Check
         </button>
@@ -53,12 +54,12 @@
           </p>
        </div>
     </div>
-     <p v-if="overallStatus" class="mt-4 text-sm text-slate-600 dark:text-slate-300">{{ overallStatus }}</p>
+      <p v-if="overallStatus" class="mt-4 text-sm text-slate-600 dark:text-slate-300">{{ overallStatus }}</p>
     </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useBulkCheckStore } from '@/stores/bulkCheckStore';
 import { checkWhatsAppNumberApi } from '@/services/api';
@@ -69,20 +70,29 @@ const bulkCheckStore = useBulkCheckStore();
 const numbersInput = ref('');
 const isChecking = ref(false);
 const overallStatus = ref('');
-const stopRequested = ref(false); // <-- NEW: Flag to signal stop
+const stopRequested = ref(false);
+const resumeIndex = ref(0); 
 
 const parseNumbers = (input) => {
   if (!input) return [];
   return input
     .split(/[,;\n]+/)
-    .map(num => num.trim().replace(/\D/g, ''))
+    .map(num => num.trim().replace(/\D/g, '')) 
     .filter(num => num.length > 0);
 };
 
-// NEW: Function to handle stop button click
+watch(numbersInput, (newVal, oldVal) => {
+  if (newVal.trim() !== oldVal.trim() && !isChecking.value) { 
+    resumeIndex.value = 0;
+    overallStatus.value = 'Number list changed. Any new check will start from the beginning.';
+    bulkCheckStore.clearBulkCheckResults(); 
+    console.log('Numbers input changed, resumeIndex reset.');
+  }
+});
+
 const handleStopCheck = () => {
   stopRequested.value = true;
-  overallStatus.value = 'Stopping checks... Please wait for the current number to finish.';
+  overallStatus.value = 'Stop signal received. Finishing current number and pausing...';
 };
 
 const performBulkCheck = async () => {
@@ -90,76 +100,74 @@ const performBulkCheck = async () => {
     overallStatus.value = 'Session not selected or not ready for checking numbers.';
     return;
   }
-  if (!numbersInput.value.trim()) {
-    overallStatus.value = 'Please enter numbers to check.';
+  const allParsedNumbers = parseNumbers(numbersInput.value);
+  if (allParsedNumbers.length === 0) {
+    overallStatus.value = 'No valid numbers to check.';
+    resumeIndex.value = 0; 
+    bulkCheckStore.clearBulkCheckResults();
     return;
   }
 
   isChecking.value = true;
-  stopRequested.value = false; // <-- NEW: Reset stop flag at the beginning
-  overallStatus.value = 'Starting checks... This may take a while.';
-  
-  bulkCheckStore.startNewBulkCheck(); 
+  stopRequested.value = false;
 
-  const numbersToCheck = parseNumbers(numbersInput.value);
-  if (numbersToCheck.length === 0) {
-    overallStatus.value = 'No valid numbers to check after parsing.';
-    isChecking.value = false;
-    bulkCheckStore.setBulkCheckComplete();
-    return;
+  if (resumeIndex.value === 0) {
+    bulkCheckStore.startNewBulkCheck(); 
+    overallStatus.value = `Starting new check for ${allParsedNumbers.length} numbers...`;
+  } else {
+    overallStatus.value = `Resuming check from number ${resumeIndex.value + 1} of ${allParsedNumbers.length}...`;
   }
+  
+  for (let i = resumeIndex.value; i < allParsedNumbers.length; i++) {
+    const number = allParsedNumbers[i];
 
-  let checkedCount = 0;
-  const totalNumbers = numbersToCheck.length;
-
-  for (const number of numbersToCheck) {
-    // NEW: Check if stop has been requested before processing each number
     if (stopRequested.value) {
-      overallStatus.value = `Bulk check stopped by user after processing ${checkedCount} of ${totalNumbers} numbers.`;
-      break; // Exit the loop
+      overallStatus.value = `Check paused. Processed ${bulkCheckStore.registeredNumbers.length + bulkCheckStore.unregisteredNumbers.length} of ${allParsedNumbers.length}. Ready to resume from number ${i + 1}.`;
+      resumeIndex.value = i; 
+      break; 
     }
 
     if (!sessionStore.currentSelectedSessionId) { 
-        overallStatus.value = 'Session changed or removed during checks. Aborting.';
-        break; 
-    }
-    try {
-      const response = await checkWhatsAppNumberApi(sessionStore.currentSelectedSessionId, number);
-      // Ensure stop wasn't requested during the API call
-      if (stopRequested.value && checkedCount < totalNumbers -1) { // check if it's not the very last one already processed
-         // overallStatus.value might already be "Stopping...". No need to overwrite immediately.
-         // The loop will break on the next iteration.
-      } else {
-         if (response.success && response.isRegistered) {
-           bulkCheckStore.addRegisteredNumber(number); 
-         } else if (response.success && !response.isRegistered) {
-           bulkCheckStore.addUnregisteredNumber({ number, reason: response.message || 'Not registered' });
-         } else {
-           bulkCheckStore.addUnregisteredNumber({ number, reason: response.error || 'Failed to check (API error)' });
-         }
-      }
-    } catch (error) {
-      // Only add error if not stopped
-      if (!stopRequested.value) {
-         bulkCheckStore.addUnregisteredNumber({ number, reason: error.message || 'Network error or critical API failure' });
-      }
-    }
-    
-    // Only increment if not stopped before processing
-    if (!stopRequested.value || (stopRequested.value && checkedCount < totalNumbers -1) ) {
-        checkedCount++;
+      overallStatus.value = 'Session changed or removed during checks. Aborting.';
+      resumeIndex.value = i; 
+      break; 
     }
 
-    if (!stopRequested.value) { // Don't update status if we are trying to stop
-        overallStatus.value = `Checked ${checkedCount} of ${totalNumbers} numbers...`;
+    let currentStatusUpdate = `Checking ${i + 1}/${allParsedNumbers.length}: ${number}...`;
+    overallStatus.value = currentStatusUpdate;
+
+    try {
+      const response = await checkWhatsAppNumberApi(sessionStore.currentSelectedSessionId, number);
+      
+      if (stopRequested.value && i < allParsedNumbers.length -1 ) {
+         resumeIndex.value = i;
+      } else {
+        if (response.success && response.isRegistered) {
+          bulkCheckStore.addRegisteredNumber(number); 
+          overallStatus.value = `${currentStatusUpdate} Registered.`;
+        } else if (response.success && !response.isRegistered) {
+          bulkCheckStore.addUnregisteredNumber({ number, reason: 'Not registered' }); 
+          overallStatus.value = `${currentStatusUpdate} Not Registered.`;
+        } else { 
+          bulkCheckStore.addUnregisteredNumber({ number, reason: response.error || 'Failed to check (API error)' });
+          overallStatus.value = `${currentStatusUpdate} Error: ${response.error || 'API Error'}.`;
+        }
+      }
+    } catch (error) { 
+       if (!stopRequested.value) {
+        bulkCheckStore.addUnregisteredNumber({ number, reason: error.message || 'Network error' });
+        overallStatus.value = `${currentStatusUpdate} Error: ${error.message || 'Network Error'}.`;
+      }
     }
+  } 
+
+  isChecking.value = false; 
+  
+  if (!stopRequested.value) { 
+    overallStatus.value = `Bulk check complete. Processed ${allParsedNumbers.length} numbers.`;
+    resumeIndex.value = 0; 
   }
   
-  isChecking.value = false; // Always set to false when loop finishes or breaks
-  if (!stopRequested.value) { // If not stopped by user
-    overallStatus.value = `Bulk check complete. Processed ${checkedCount} numbers. Results are displayed below.`;
-  }
-  // stopRequested.value = false; // Reset for next run, already done at the start of performBulkCheck
   bulkCheckStore.setBulkCheckComplete();
 };
 
@@ -169,7 +177,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   bulkCheckStore.setIsCheckingActive(false);
-  // If checking was in progress and component is unmounted, ensure it's signaled to stop
   if (isChecking.value) {
     stopRequested.value = true;
   }
@@ -180,6 +187,5 @@ onUnmounted(() => {
 <style scoped>
 /* Add any specific styles for this panel if needed */
 .feature-panel {
-  /* You might want to ensure it takes enough height or has its own scrollbar if content overflows */
 }
 </style>
