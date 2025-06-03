@@ -1,4 +1,4 @@
-// vue-frontend/vue-whatsapp-frontend/src/components/features/DashboardHomePanel.vue
+<!-- vue-frontend/vue-whatsapp-frontend/src/components/features/DashboardHomePanel.vue -->
 <template>
   <div class="space-y-6">
     <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6">
@@ -135,35 +135,76 @@
       :show="isQrModalVisible"
       :qr-code="currentQrCode"
       :session-id="currentSessionIdForQr"
-      @close="isQrModalVisible = false"
+      :is-loading="isQrCodeLoading"
+      @close="closeQrModal"
+      @request-qr="requestQrCodeForSession(currentSessionIdForQr)"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
 import { useSessionStore } from '@/stores/sessionStore';
-import { useAuthStore } from '@/stores/authStore'; // Assuming globalStatusMessage might be here or in sessionStore
+import { useAuthStore } from '@/stores/authStore';
 import AddNewDeviceModal from '@/components/modals/AddNewDeviceModal.vue';
 import QrCodeDisplayModal from '@/components/modals/QrCodeDisplayModal.vue';
 import { PlusIcon, QrCodeIcon, TrashIcon, ArrowPathIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline';
+import { requestQrCode, getSocket } from '@/services/socket';
 
 const sessionStore = useSessionStore();
-const authStore = useAuthStore(); // If globalStatusMessage is from authStore
+const authStore = useAuthStore();
 
 const isAddNewDeviceModalVisible = ref(false);
 const newSessionIdForModal = ref('');
 const isQrModalVisible = ref(false);
 const currentQrCode = ref('');
 const currentSessionIdForQr = ref('');
+const isQrCodeLoading = ref(false);
 const addDeviceError = ref('');
 
 const searchTerm = ref('');
 const itemsPerPage = ref(5);
 const currentPage = ref(1);
 
+// Set up global function to allow opening QR modal from socket events
+function setupGlobalQrModalOpener() {
+  window.openQrModalForSession = (sessionId) => {
+    const sessionData = sessionStore.sessions[sessionId];
+    if (sessionData) {
+      // Only auto-show for sessions that have just received a new QR
+      if (sessionData.qrCode && sessionData.qrCode.length > 0) {
+        displayQrCode(sessionId);
+      }
+    }
+  };
+}
+
+// Auto-watch for QR code changes
+watch(() => sessionStore.sessions, (newSessions, oldSessions) => {
+  // If we have an open QR modal and the QR code for that session changes, update the current QR code
+  if (isQrModalVisible.value && currentSessionIdForQr.value) {
+    const newSession = newSessions[currentSessionIdForQr.value];
+    if (newSession && newSession.qrCode && (!oldSessions[currentSessionIdForQr.value]?.qrCode || oldSessions[currentSessionIdForQr.value]?.qrCode !== newSession.qrCode)) {
+      console.log(`QR code updated for ${currentSessionIdForQr.value} while modal is open`);
+      currentQrCode.value = newSession.qrCode;
+      isQrCodeLoading.value = false;
+    }
+  }
+}, { deep: true });
+
 onMounted(() => {
   sessionStore.fetchSessions();
+  setupGlobalQrModalOpener();
+  
+  // Ensure socket listeners are initialized
+  sessionStore.initializeSocketListeners();
+});
+
+onBeforeUnmount(() => {
+  // Clean up global function when component is unmounted
+  if (window.openQrModalForSession) {
+    delete window.openQrModalForSession;
+  }
 });
 
 const onlineSessionsCount = computed(() => {
@@ -208,8 +249,8 @@ watch(() => sessionStore.sessions, () => {
 }, { deep: true });
 
 
-const getStatusClass = (session_item) => { // Param is session_item from v-for
-  const sessionData = sessionStore.sessions[session_item.sessionId]; // Get live data from store
+const getStatusClass = (session_item) => {
+  const sessionData = sessionStore.sessions[session_item.sessionId];
   if (sessionData?.isReady) return 'bg-green-100 text-green-800 dark:bg-green-700/30 dark:text-green-300';
   if (sessionData?.qrCode && sessionData.qrCode.length > 0) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700/30 dark:text-yellow-300';
   if (sessionData?.hasQr) return 'bg-orange-100 text-orange-800 dark:bg-orange-700/30 dark:text-orange-300';
@@ -223,6 +264,7 @@ const openAddNewDeviceModal = () => {
     newSessionIdForModal.value = '';
     isAddNewDeviceModalVisible.value = true;
 };
+
 const closeAddNewDeviceModal = () => {
     isAddNewDeviceModalVisible.value = false;
     newSessionIdForModal.value = '';
@@ -240,35 +282,83 @@ const handleAddNewDevice = async (newId) => {
   try {
     await sessionStore.addNewSession(newId);
     isAddNewDeviceModalVisible.value = false;
+    
+    // After adding a new session, request QR code and show modal if available
+    setTimeout(() => {
+      const sessionData = sessionStore.sessions[newId];
+      if (sessionData && !sessionData.isReady) {
+        displayQrCode(newId);
+      }
+    }, 500);
   } catch (error) {
     console.error("Error adding new session from panel:", error);
     addDeviceError.value = error.message || 'Failed to add session. Check console for details.';
   }
 };
 
-const displayQrCode = (sessionId) => { // Changed to accept sessionId
-  const sessionFromStore = sessionStore.sessions[sessionId]; // Get the latest from store
+const displayQrCode = (sessionId) => {
+  const sessionFromStore = sessionStore.sessions[sessionId];
 
   console.log(`DashboardHomePanel: Clicked QR button for session '${sessionId}'. Session object from store:`, JSON.parse(JSON.stringify(sessionFromStore)));
 
   if (sessionFromStore && sessionFromStore.qrCode && sessionFromStore.qrCode.length > 0) {
+    // QR code available, show it
     currentQrCode.value = sessionFromStore.qrCode;
     currentSessionIdForQr.value = sessionId;
     isQrModalVisible.value = true;
+    isQrCodeLoading.value = false;
   } else if (sessionFromStore && sessionFromStore.hasQr) {
-    // QR is expected but not yet in store, show modal in loading state
+    // QR expected but not yet available, show modal in loading state and request QR
     currentQrCode.value = ''; // Ensure modal shows "Waiting for QR code..."
     currentSessionIdForQr.value = sessionId;
     isQrModalVisible.value = true;
-    console.log(`DashboardHomePanel: QR for ${sessionId} is expected (hasQr=true) but string is missing. Modal will show 'Waiting'.`);
-    // Optionally, trigger a re-fetch or wait for socket, but re-init is an option for user.
+    isQrCodeLoading.value = true;
+    console.log(`DashboardHomePanel: QR for ${sessionId} is expected (hasQr=true) but string is missing. Requesting QR...`);
+    requestQrCodeForSession(sessionId);
   } else {
-    // No QR info at all, and button was somehow enabled (or user clicked re-init which then called this)
-    // Attempt to re-initialize to fetch the QR.
+    // No QR info at all, attempt to re-initialize
     console.warn(`DashboardHomePanel: QR button clicked for ${sessionId}, but no QR info in store. Attempting re-init.`);
     sessionStore.updateGlobalStatus(`No QR for ${sessionId}. Attempting to re-initialize...`);
-    reinitializeSession(sessionId); // This will call addNewSession which sets processing state
+    reinitializeSession(sessionId);
+    
+    // Show the modal in loading state
+    currentQrCode.value = '';
+    currentSessionIdForQr.value = sessionId;
+    isQrModalVisible.value = true;
+    isQrCodeLoading.value = true;
   }
+};
+
+const requestQrCodeForSession = (sessionId) => {
+  if (!sessionId) return;
+  
+  isQrCodeLoading.value = true; // Show loading state in modal
+  console.log(`Requesting QR code for session: ${sessionId}`);
+  
+  // Use socket to request QR code
+  if (requestQrCode(sessionId)) {
+    // Set a timeout to stop loading if no QR is received
+    setTimeout(() => {
+      if (isQrCodeLoading.value && currentSessionIdForQr.value === sessionId) {
+        const currentQrData = sessionStore.sessions[sessionId]?.qrCode;
+        if (!currentQrData) {
+          console.warn(`No QR received for ${sessionId} after timeout`);
+          // Keep modal open, but update loading state
+          isQrCodeLoading.value = false;
+        }
+      }
+    }, 5000);
+  } else {
+    console.error(`Failed to request QR code - socket not available or not connected`);
+    isQrCodeLoading.value = false;
+  }
+};
+
+const closeQrModal = () => {
+  isQrModalVisible.value = false;
+  currentSessionIdForQr.value = null;
+  currentQrCode.value = '';
+  isQrCodeLoading.value = false;
 };
 
 const reinitializeSession = async (sessionId) => {
@@ -276,28 +366,26 @@ const reinitializeSession = async (sessionId) => {
         console.log(`Re-initialization for ${sessionId} already in progress.`);
         return;
     }
-    // No confirmation needed if it's usually to get QR
-    // globalStatusMessage.value = `Re-initializing '${sessionId}'...`; // This is set in store's addNewSession
     try {
-        await sessionStore.addNewSession(sessionId); // This will set isProcessingSession in store
-        // After this, the store should update via API response or socket.
-        // If QR comes via API response directly, sessionStore.sessions[sessionId].qrCode will be set.
-        // Then, we can try to show it.
-        // A slight delay might be needed for the store to update if QR comes from API response in addNewSession.
+        await sessionStore.addNewSession(sessionId);
+        
+        // After re-initializing, try to get the QR code
         setTimeout(() => {
             const updatedSession = sessionStore.sessions[sessionId];
-            if (updatedSession && updatedSession.qrCode && !updatedSession.isReady) {
-                 displayQrCode(sessionId); // Pass sessionId
-            } else if (updatedSession && updatedSession.hasQr && !updatedSession.qrCode && !updatedSession.isReady) {
-                // If hasQr is true but no qrCode string yet, open modal in waiting state
-                currentQrCode.value = '';
-                currentSessionIdForQr.value = sessionId;
-                isQrModalVisible.value = true;
+            if (updatedSession && !updatedSession.isReady) {
+                // If QR code is already available, show it
+                if (updatedSession.qrCode) {
+                    displayQrCode(sessionId);
+                } 
+                // If QR is expected but not yet available, request it
+                else if (updatedSession.hasQr) {
+                    displayQrCode(sessionId);
+                    requestQrCodeForSession(sessionId);
+                }
             }
-        }, 300); // Adjust delay if needed, or rely on watcher for qrCode change
+        }, 500);
     } catch (error) {
         console.error(`Error re-initializing session ${sessionId} from panel:`, error);
-        // Error is handled in store, globalStatusMessage should update
     }
 };
 
@@ -309,7 +397,6 @@ const confirmRemoveSession = (sessionId) => {
 </script>
 
 <style scoped>
-/* Styles remain the same */
 .btn-purple-theme {
     @apply bg-walazy-purple hover:bg-opacity-90 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-800 focus:ring-walazy-purple transition-all ease-in-out duration-150 transform active:scale-95;
 }

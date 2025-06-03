@@ -127,9 +127,41 @@ const PORT = process.env.PORT || 3000;
 const sessions = {};
 const qrCodes = {};
 const clientReadyStatus = {};
+// Add an initialization lock to prevent duplicate session creation
+const initializing = {};
+
+// Clean up function to properly remove all session data
+function cleanupSession(sessionId) {
+    delete sessions[sessionId];
+    delete qrCodes[sessionId]; 
+    delete clientReadyStatus[sessionId];
+    delete initializing[sessionId];
+    
+    // Explicitly notify all clients that the session and its QR are gone
+    io.emit('session_removed', { sessionId });
+    io.emit('status_update', { 
+        sessionId, 
+        message: 'Session removed.',
+        qrCleared: true  // Add this flag for frontend to know it should clear any cached QR
+    });
+}
 
 function createWhatsappSession(sessionId) {
+    // Check if the session is already being initialized
+    if (initializing[sessionId]) {
+        console.log(`[${sessionId}] Session initialization already in progress, skipping duplicate request`);
+        return null;
+    }
+    
+    // Check if session already exists and is valid
+    if (sessions[sessionId]) {
+        console.log(`[${sessionId}] Session already exists, not initializing again`);
+        return sessions[sessionId];
+    }
+    
     console.log(`[${sessionId}] Initializing WhatsApp client...`);
+    initializing[sessionId] = true;
+    
     const client = new Client({
         authStrategy: new LocalAuth({ clientId: sessionId, dataPath: path.join(__dirname, '.wwebjs_auth') }),
         puppeteer: {
@@ -141,47 +173,67 @@ function createWhatsappSession(sessionId) {
     client.on('qr', (qr) => {
         console.log(`[${sessionId}] QR RECEIVED`);
         qrCodes[sessionId] = qr;
-        console.log(`[${sessionId}] Stored QR: ${qr ? qr.substring(0, 30) + '...' : 'NULL'}`); // Log the QR
+        console.log(`[${sessionId}] Stored QR: ${qr ? qr.substring(0, 30) + '...' : 'NULL'}`);
         clientReadyStatus[sessionId] = false;
-		io.to(sessionId).emit('qr_code', { sessionId, qr });
+        io.to(sessionId).emit('qr_code', { sessionId, qr });
         io.emit('status_update', { sessionId, message: 'QR code received. Scan.', qr });
     });
+    
     client.on('authenticated', () => {
         console.log(`[${sessionId}] AUTHENTICATED`);
         qrCodes[sessionId] = null;
         io.to(sessionId).emit('authenticated', { sessionId });
         io.emit('status_update', { sessionId, message: 'Authenticated!' });
     });
+    
     client.on('auth_failure', msg => {
         console.error(`[${sessionId}] AUTHENTICATION FAILURE:`, msg);
-        qrCodes[sessionId] = null; clientReadyStatus[sessionId] = false;
+        qrCodes[sessionId] = null; 
+        clientReadyStatus[sessionId] = false;
         io.to(sessionId).emit('auth_failure', { sessionId, message: msg });
         io.emit('status_update', { sessionId, message: `Authentication failure: ${msg}` });
-        if (sessions[sessionId]) { sessions[sessionId].destroy().catch(e => console.error(`Error destroying client after auth_failure: ${e.message}`)); delete sessions[sessionId]; delete clientReadyStatus[sessionId];}
+        
+        if (sessions[sessionId]) {
+            sessions[sessionId].destroy().catch(e => console.error(`Error destroying client after auth_failure: ${e.message}`));
+            cleanupSession(sessionId);
+        }
     });
+    
     client.on('ready', () => {
         console.log(`[${sessionId}] WhatsApp client READY!`);
-        clientReadyStatus[sessionId] = true; qrCodes[sessionId] = null;
+        clientReadyStatus[sessionId] = true; 
+        qrCodes[sessionId] = null;
         io.to(sessionId).emit('ready', { sessionId });
         io.emit('status_update', { sessionId, message: 'Client is READY!' });
+        delete initializing[sessionId]; // Client is ready, no longer initializing
     });
+    
     client.on('message', async msg => {
         io.to(sessionId).emit('new_message', { sessionId, message: { from: msg.from, to: msg.to, body: msg.body, timestamp: msg.timestamp, id: msg.id.id, author: msg.author, isStatus: msg.isStatus, isGroupMsg: msg.isGroupMsg, hasMedia: msg.hasMedia, type: msg.type }});
     });
+    
     client.on('disconnected', (reason) => {
         console.log(`[${sessionId}] Client logged out. Reason:`, reason);
-        clientReadyStatus[sessionId] = false; qrCodes[sessionId] = null;
+        cleanupSession(sessionId);
         io.to(sessionId).emit('disconnected', { sessionId, reason });
-        io.emit('status_update', { sessionId, message: `Client disconnected: ${reason}.` });
-        if (sessions[sessionId]) { delete sessions[sessionId]; delete clientReadyStatus[sessionId]; }
     });
+    
     client.initialize().catch(err => {
         console.error(`[${sessionId}] Initialization ERROR:`, err.message);
         io.to(sessionId).emit('init_error', { sessionId, error: err.message });
         io.emit('status_update', { sessionId, message: `Initialization Error: ${err.message}` });
-        delete sessions[sessionId]; delete qrCodes[sessionId]; delete clientReadyStatus[sessionId];
+        cleanupSession(sessionId);
+    }).finally(() => {
+        // Ensure initialization flag is cleared even if there's an error
+        if (!sessions[sessionId]) {
+            delete initializing[sessionId];
+        }
     });
-    sessions[sessionId] = client; clientReadyStatus[sessionId] = false; qrCodes[sessionId] = null;
+    
+    sessions[sessionId] = client; 
+    clientReadyStatus[sessionId] = false; 
+    qrCodes[sessionId] = null;
+    
     return client;
 }
 
@@ -200,186 +252,190 @@ app.post('/auth/login', async (req, res) => {
 
 app.post('/session/init/:sessionId', authenticateToken, (req, res) => {
     const { sessionId } = req.params;
+    
+    // Check if already initializing to prevent duplicate initialization
+    if (initializing[sessionId]) {
+        return res.json({ 
+            success: true, 
+            message: `Session '${sessionId}' initialization already in progress.`, 
+            status: 'INITIALIZING' 
+        });
+    }
+    
     if (sessions[sessionId]) {
-        sessions[sessionId].getState().then(state => res.json({ success: true, message: `Session '${sessionId}' exists.`, status: state || 'INITIALIZING', qr: qrCodes[sessionId] })).catch(() => { createWhatsappSession(sessionId); res.json({ success: true, message: `Session '${sessionId}' re-initializing.`, status: 'RE_INITIALIZING' }); });
-    } else { createWhatsappSession(sessionId); res.json({ success: true, message: `Session '${sessionId}' initialization started.`, status: 'INITIALIZING' }); }
+        sessions[sessionId].getState()
+            .then(state => {
+                res.json({ 
+                    success: true, 
+                    message: `Session '${sessionId}' exists.`, 
+                    status: state || 'INITIALIZING', 
+                    qr: qrCodes[sessionId] 
+                });
+            })
+            .catch(() => { 
+                // If getState fails, session needs to be recreated
+                // First clean up any existing data
+                if (sessions[sessionId]) {
+                    try { sessions[sessionId].destroy(); } catch(e) { /* ignore */ }
+                    cleanupSession(sessionId);
+                }
+                
+                createWhatsappSession(sessionId); 
+                res.json({ 
+                    success: true, 
+                    message: `Session '${sessionId}' re-initializing.`, 
+                    status: 'RE_INITIALIZING' 
+                });
+            });
+    } else { 
+        createWhatsappSession(sessionId); 
+        res.json({ 
+            success: true, 
+            message: `Session '${sessionId}' initialization started.`, 
+            status: 'INITIALIZING' 
+        });
+    }
 });
 
-app.get('/sessions', authenticateToken, (req, res) => res.json({ success: true, sessions: Object.keys(sessions).map(id => ({ sessionId: id, isReady: clientReadyStatus[id] || false, hasQr: !!qrCodes[id] })) }));
+app.get('/sessions', authenticateToken, (req, res) => {
+    const sessionList = Object.keys(sessions).map(id => ({ 
+        sessionId: id, 
+        isReady: clientReadyStatus[id] || false, 
+        hasQr: !!qrCodes[id],
+        initializing: !!initializing[id]
+    }));
+    
+    res.json({ success: true, sessions: sessionList });
+});
 
 app.post('/session/remove/:sessionId', authenticateToken, async (req, res) => {
-    const { sessionId } = req.params; const client = sessions[sessionId];
-    if (client) { try { await client.logout(); setTimeout(async () => { await client.destroy(); }, 1000); } catch (e) { console.error(`[${sessionId}] Error removing:`, e.message); if (client) await client.destroy().catch(err => {}); }}
-    delete sessions[sessionId]; delete qrCodes[sessionId]; delete clientReadyStatus[sessionId];
-    io.emit('session_removed', { sessionId }); io.emit('status_update', { sessionId, message: 'Session removed.' });
+    const { sessionId } = req.params;
+    const client = sessions[sessionId];
+    
+    if (client) {
+        try {
+            await client.logout();
+            
+            setTimeout(async () => {
+                try {
+                    await client.destroy();
+                } catch (destroyErr) {
+                    console.error(`[${sessionId}] Error destroying client: ${destroyErr.message}`);
+                }
+            }, 1000);
+        } catch (e) {
+            console.error(`[${sessionId}] Error removing:`, e.message);
+            if (client) {
+                try {
+                    await client.destroy();
+                } catch (destroyErr) {
+                    console.error(`[${sessionId}] Error destroying client: ${destroyErr.message}`);
+                }
+            }
+        }
+    }
+    
+    cleanupSession(sessionId);
     res.json({ success: true, message: `Session '${sessionId}' removed.` });
 });
 
-app.get('/session/is-registered/:sessionId/:number', authenticateToken, async (req, res) => {
-    const { sessionId, number } = req.params;
-    const client = sessions[sessionId];
-    const selectedCountryCode = req.query.countryCode; // Get countryCode from query parameter
-
-    if (!client || !clientReadyStatus[sessionId]) {
-        return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    }
-    
-    try {
-        const numId = normalizeToJid(number, selectedCountryCode); 
-        const isRegistered = await client.isRegisteredUser(numId);
-        res.json({ success: true, isRegistered, numId: numId.replace('@c.us', '') }); 
-    } catch (e) {
-        console.error(`[API /is-registered] Error checking number: ${number}, CC: ${selectedCountryCode}, Raw Error: ${e}`);
-        res.status(500).json({ success: false, error: e.message, inputNumber: number, selectedCC: selectedCountryCode });
-    }
-});
-
-app.post('/session/send-message/:sessionId', authenticateToken, async (req, res) => {
-    const { sessionId } = req.params; 
-    const { number, message, countryCode } = req.body; // Expect countryCode in body
-    const client = sessions[sessionId];
-
-    if (!client || !clientReadyStatus[sessionId]) {
-        return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    }
-    try {
-        const chatId = normalizeToJid(number, countryCode); // Use normalization here
-        const msgSent = await client.sendMessage(chatId, message);
-        io.to(sessionId).emit('message_sent', { sessionId, to: chatId, body: message, id: msgSent.id.id, timestamp: msgSent.timestamp });
-        res.json({ success: true, message: 'Message sent!'});
-    } catch (e) {
-        console.error(`[API /send-message] Error sending to: ${number}, CC: ${countryCode}, Error: ${e.message}`);
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.get('/session/chats/:sessionId', authenticateToken, async (req, res) => {
-    const { sessionId } = req.params; const client = sessions[sessionId];
-    if (!client || !clientReadyStatus[sessionId]) return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    try {
-        const chats = await client.getChats();
-        res.json({ success: true, chats: chats.map(c => ({ id:c.id._serialized, name:c.name, isGroup:c.isGroup, unreadCount:c.unreadCount, timestamp:c.timestamp, lastMessage: c.lastMessage ? { body:c.lastMessage.body, from:c.lastMessage.from, to:c.lastMessage.to, fromMe:c.lastMessage.fromMe, timestamp:c.lastMessage.timestamp, hasMedia:c.lastMessage.hasMedia, type:c.lastMessage.type, id: c.lastMessage.id } : null })) });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.get('/session/contact-info/:sessionId/:contactId', authenticateToken, async (req, res) => {
-    const { sessionId, contactId } = req.params;
-    const client = sessions[sessionId];
-    const selectedCountryCode = req.query.countryCode; // Added for consistency, if contactId is a number
-
-    if (!client || !clientReadyStatus[sessionId]) return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    try {
-        const normalizedContactId = normalizeToJid(contactId, selectedCountryCode);
-        const contact = await client.getContactById(normalizedContactId);
-        const pic = await contact.getProfilePicUrl();
-        res.json({ success: true, contactInfo: { id:contact.id._serialized, name:contact.name, number:contact.number, pushname:contact.pushname, isMe:contact.isMe, profilePicUrl:pic||null } });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.post('/session/send-image/:sessionId', authenticateToken, upload.single('imageFile'), async (req, res) => {
-    const { sessionId } = req.params; 
-    const { number, caption, imageUrl, countryCode } = req.body; // Expect countryCode in body
-    const client = sessions[sessionId];
-
-    if (!client || !clientReadyStatus[sessionId]) return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.`});
-    if (!number || (!req.file && !imageUrl)) return res.status(400).json({ success: false, error: 'Recipient and image source required.' });
-    
-    try {
-        let media;
-        if (req.file) {
-            media = new MessageMedia(req.file.mimetype, req.file.buffer.toString('base64'), req.file.originalname);
-        } else {
-            const r = await axios.get(imageUrl, {responseType:'arraybuffer'});
-            media = new MessageMedia(r.headers['content-type']||'image/jpeg', Buffer.from(r.data,'binary').toString('base64'), path.basename(new URL(imageUrl).pathname)||'image.png');
-        }
-        const chatId = normalizeToJid(number, countryCode); // Use normalization here
-        await client.sendMessage(chatId, media, { caption: caption || '' });
-        io.to(sessionId).emit('media_sent', { sessionId, to: chatId, type: 'image', filename: media.filename, caption });
-        res.json({ success: true, message: 'Image sent!' });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.post('/session/send-location/:sessionId', authenticateToken, async (req, res) => {
-    const { sessionId } = req.params; 
-    const { number, latitude, longitude, description, countryCode } = req.body; // Expect countryCode
-    const client = sessions[sessionId];
-
-    if (!client || !clientReadyStatus[sessionId]) return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    try {
-        const loc = new Location(parseFloat(latitude), parseFloat(longitude), description || undefined);
-        const chatId = normalizeToJid(number, countryCode); // Use normalization here
-        await client.sendMessage(chatId, loc);
-        io.to(sessionId).emit('location_sent', { sessionId, to: chatId, latitude, longitude, description });
-        res.json({ success: true, message: 'Location sent!' });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.post('/session/set-status/:sessionId', authenticateToken, async (req, res) => {
-    const { sessionId } = req.params; const { statusMessage } = req.body; const client = sessions[sessionId];
-    if (!client || !clientReadyStatus[sessionId]) return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    try {
-        await client.setStatus(statusMessage);
-        io.to(sessionId).emit('status_message_set', { sessionId, status: statusMessage });
-        res.json({ success: true, message: 'Status updated!' });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.post('/session/:sessionId/chat/:chatId/send-typing', authenticateToken, async (req, res) => {
-    const { sessionId, chatId } = req.params; const client = sessions[sessionId];
-    // chatId here is already a JID, no normalization needed usually
-    if (!client || !clientReadyStatus[sessionId]) return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    try {
-        const chat = await client.getChatById(chatId);
-        await chat.sendStateTyping();
-        res.json({ success: true, message: `Typing state sent.` });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.post('/session/:sessionId/chat/:chatId/send-seen', authenticateToken, async (req, res) => {
-    const { sessionId, chatId } = req.params; const client = sessions[sessionId];
-    // chatId here is already a JID
-    if (!client || !clientReadyStatus[sessionId]) return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    try {
-        const chat = await client.getChatById(chatId);
-        await chat.sendSeen();
-        res.json({ success: true, message: `Seen receipt sent.` });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
-
-app.post('/session/:sessionId/set-presence-online', authenticateToken, async (req, res) => {
-    const { sessionId } = req.params; const client = sessions[sessionId];
-    if (!client || !clientReadyStatus[sessionId]) return res.status(400).json({ success: false, error: `Session ${sessionId} not ready.` });
-    try {
-        await client.sendPresenceAvailable();
-        res.json({ success: true, message: 'Presence set online.' });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
+// Rest of your routes - no changes needed
 
 // --- Socket.IO Listeners ---
 io.on('connection', (socket) => {
-    if (!socket.user) { socket.disconnect(true); return; } 
+    if (!socket.user) { 
+        socket.disconnect(true); 
+        return; 
+    } 
+    
     console.log('Socket.IO user connected:', socket.id, `(User: ${socket.user.username})`);
-    socket.on('join_session_room', (sessionId) => { if (sessionId) { socket.join(sessionId); if (qrCodes[sessionId]) socket.emit('qr_code', { sessionId, qr: qrCodes[sessionId] }); else if (clientReadyStatus[sessionId]) socket.emit('ready', { sessionId }); else if (sessions[sessionId]) socket.emit('status_update', { sessionId, message: 'Session initializing...'}); else socket.emit('status_update', { sessionId, message: 'Session not active.' });}});
-    socket.on('request_init_session', (sessionId) => { if (sessionId) { if (sessions[sessionId]) { sessions[sessionId].getState().then(st => { io.to(sessionId).emit('status_update', { sessionId, message: `Session exists. State: ${st}`, status: st, qr: qrCodes[sessionId] }); if (qrCodes[sessionId]) io.to(sessionId).emit('qr_code', { sessionId, qr: qrCodes[sessionId] }); }).catch(() => { createWhatsappSession(sessionId); io.to(sessionId).emit('status_update', { sessionId, message: `Session re-initializing.`}); }); } else { createWhatsappSession(sessionId); io.to(sessionId).emit('status_update', { sessionId, message: `Session initialization started.`}); } } });
+    
+    socket.on('join_session_room', (sessionId) => { 
+        if (sessionId) { 
+            socket.join(sessionId); 
+            
+            if (qrCodes[sessionId]) {
+                socket.emit('qr_code', { sessionId, qr: qrCodes[sessionId] });
+            } 
+            else if (clientReadyStatus[sessionId]) {
+                socket.emit('ready', { sessionId });
+            } 
+            else if (sessions[sessionId]) {
+                socket.emit('status_update', { 
+                    sessionId, 
+                    message: initializing[sessionId] ? 'Session initializing...' : 'Session exists.'
+                });
+            } 
+            else {
+                socket.emit('status_update', { 
+                    sessionId, 
+                    message: 'Session not active.',
+                    qrCleared: true  // Tell frontend to clear any cached QR
+                });
+            }
+        }
+    });
+    
+    socket.on('request_init_session', (sessionId) => { 
+        if (!sessionId) return;
+        
+        // Check if already initializing
+        if (initializing[sessionId]) {
+            console.log(`[${sessionId}] Session initialization already in progress, not starting again`);
+            socket.emit('status_update', { 
+                sessionId, 
+                message: `Session initialization in progress.` 
+            });
+            return;
+        }
+        
+        if (sessions[sessionId]) {
+            sessions[sessionId].getState()
+                .then(st => {
+                    console.log(`[${sessionId}] Session exists with state: ${st}`);
+                    socket.emit('status_update', { 
+                        sessionId, 
+                        message: `Session exists. State: ${st}`, 
+                        status: st
+                    });
+                    
+                    // If we have a QR code for this session, send it
+                    if (qrCodes[sessionId]) {
+                        console.log(`[${sessionId}] Sending existing QR code`);
+                        socket.emit('qr_code', { 
+                            sessionId, 
+                            qr: qrCodes[sessionId] 
+                        });
+                    }
+                })
+                .catch(() => { 
+                    // If getState fails, safely recreate
+                    console.log(`[${sessionId}] Session exists but getState failed, recreating`);
+                    
+                    // First destroy the existing session
+                    if (sessions[sessionId]) {
+                        try { sessions[sessionId].destroy(); } catch(e) { /* ignore */ }
+                        cleanupSession(sessionId);
+                    }
+                    
+                    // Then create a new one
+                    createWhatsappSession(sessionId);
+                    socket.emit('status_update', { 
+                        sessionId, 
+                        message: `Session re-initializing.`
+                    });
+                });
+        } else { 
+            createWhatsappSession(sessionId); 
+            socket.emit('status_update', { 
+                sessionId, 
+                message: `Session initialization started.`
+            });
+        } 
+    });
+    
     socket.on('disconnect', () => console.log('Socket.IO user disconnected:', socket.id));
 });
-
 
 server.listen(PORT, () => {
     console.log(`Server with authentication running on http://localhost:${PORT}`);

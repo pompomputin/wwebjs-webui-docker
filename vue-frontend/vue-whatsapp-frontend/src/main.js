@@ -6,10 +6,14 @@ import router from './router'; //
 import './style.css'; //
 import { initializeSocket } from './services/socket'; //
 import { useAuthStore } from '@/stores/authStore';
+import { useSessionStore } from './stores/sessionStore';
 
 const app = createApp(App); //
 
 app.use(createPinia()); // Initialize Pinia first
+
+const sessionStore = useSessionStore();
+sessionStore.initializeSocketListeners();
 
 // Access the auth store *after* Pinia is initialized
 const authStore = useAuthStore();

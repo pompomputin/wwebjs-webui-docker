@@ -62,54 +62,93 @@ export function initializeSocket() {
         }
     });
 
+    // Handle QR code events
     socket.on('qr_code', (data) => {
         console.log('Socket RX [qr_code] event for session:', data.sessionId, 'QR data:', data.qr ? data.qr.substring(0, 30) + '...' : 'NULL');
-        if (data.sessionId && data.qr) {
-            sessionStore.updateSessionQr(data.sessionId, data.qr);
-        } else {
-            console.error('Socket RX [qr_code]: Received invalid data', data);
+        
+        try {
+            const sessionStore = useSessionStore();
+            sessionStore.handleQrCodeEvent(data);
+            
+            // Auto-open QR modal for active session if modal component exists
+            if (data.qr && data.sessionId && window.openQrModalForSession) {
+                window.openQrModalForSession(data.sessionId);
+            }
+        } catch (error) {
+            console.error('Error handling QR code:', error);
         }
     });
-    socket.on('authenticated', (data) => { sessionStore.setSessionAuthenticated(data.sessionId); });
-    socket.on('ready', (data) => { sessionStore.setSessionReady(data.sessionId); });
-    socket.on('auth_failure', (data) => { sessionStore.setSessionAuthFailure(data.sessionId, data.message); });
-    socket.on('init_error', (data) => { sessionStore.setSessionInitError(data.sessionId, data.error);});
+    
+    socket.on('authenticated', (data) => { 
+        sessionStore.setSessionAuthenticated(data.sessionId); 
+    });
+    
+    socket.on('ready', (data) => { 
+        sessionStore.setSessionReady(data.sessionId); 
+    });
+    
+    socket.on('auth_failure', (data) => { 
+        sessionStore.setSessionAuthFailure(data.sessionId, data.message); 
+    });
+    
+    socket.on('init_error', (data) => { 
+        sessionStore.setSessionInitError(data.sessionId, data.error);
+    });
+    
     socket.on('session_removed', (data) => {
         sessionStore.handleSessionRemoved(data.sessionId);
         chatStore.clearChatDataForSession(data.sessionId);
     });
+    
     socket.on('disconnected_session', (data) => {
         if(data && data.sessionId) sessionStore.setSessionDisconnected(data.sessionId, data.reason); 
     });
+    
     socket.on('status_update', (data) => {
         if (data.sessionId && data.message) {
             const session = sessionStore.sessions[data.sessionId];
             if (session) session.statusMessage = data.message;
             else if(data.message.toLowerCase().includes("initialization started") || data.message.toLowerCase().includes("qr code received")) sessionStore.fetchSessions();
-            if(data.sessionId && data.qr !== undefined && sessionStore.currentSelectedSessionId === data.sessionId) {
-                if(data.qr) sessionStore.updateSessionQr(data.sessionId, data.qr);
+            
+            // If status update includes QR data, update it
+            if(data.sessionId && data.qr !== undefined) {
+                if(data.qr) {
+                    sessionStore.updateSessionQr(data.sessionId, data.qr);
+                    
+                    // Auto-open QR modal for active session if modal component exists
+                    if (window.openQrModalForSession) {
+                        window.openQrModalForSession(data.sessionId);
+                    }
+                }
             }
         }
         if (!data.sessionId && data.message) sessionStore.updateGlobalStatus(data.message);
     });
+    
     socket.on('new_message', (eventData) => {
         const chatId = eventData.message.fromMe ? eventData.message.to : eventData.message.from;
         const messagePayload = { ...eventData.message, author: eventData.message.author || (eventData.message.isGroupMsg && !eventData.message.fromMe ? eventData.message.from : undefined) };
         chatStore.addMessageToChat(eventData.sessionId, chatId, messagePayload);
     });
+    
     socket.on('message_sent', (eventData) => {
         const messagePayload = { id: eventData.id, body: eventData.body, timestamp: eventData.timestamp, from: sessionStore.selectedSessionData?.id?.user || 'me', to: eventData.to, fromMe: true, author: undefined, type: 'chat' };
         chatStore.addMessageToChat(eventData.sessionId, eventData.to, messagePayload);
     });
+    
     socket.on('media_sent', (eventData) => {
         const messagePayload = { id: `media-${Date.now()}`, body: `[Media: ${eventData.type}] ${eventData.caption || eventData.filename || ''}`, timestamp: Math.floor(Date.now() / 1000), from: sessionStore.selectedSessionData?.id?.user || 'me', to: eventData.to, fromMe: true, type: eventData.type, hasMedia: true };
         chatStore.addMessageToChat(eventData.sessionId, eventData.to, messagePayload);
     });
+    
     socket.on('location_sent', (eventData) => {
         const messagePayload = { id: `loc-${Date.now()}`, body: `[Location: ${eventData.latitude}, ${eventData.longitude}] ${eventData.description || ''}`, timestamp: Math.floor(Date.now() / 1000), from: sessionStore.selectedSessionData?.id?.user || 'me', to: eventData.to, fromMe: true, type: 'location' };
         chatStore.addMessageToChat(eventData.sessionId, eventData.to, messagePayload);
     });
-    socket.on('bulk_send_complete', (data) => { console.log('Socket RX bulk_send_complete:', data); });
+    
+    socket.on('bulk_send_complete', (data) => { 
+        console.log('Socket RX bulk_send_complete:', data); 
+    });
 
     return socket;
 }
@@ -143,4 +182,14 @@ export function disconnectSocket() {
         socket.disconnect();
         console.log('Socket.IO disconnected by disconnectSocket()');
     }
+}
+
+// Expose function to request QR codes via socket
+export function requestQrCode(sessionId) {
+    if (socket && socket.connected && sessionId) {
+        socket.emit('request_init_session', sessionId);
+        console.log(`Requested QR code for session: ${sessionId}`);
+        return true;
+    }
+    return false;
 }

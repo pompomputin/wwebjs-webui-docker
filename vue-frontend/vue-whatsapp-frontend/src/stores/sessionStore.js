@@ -2,6 +2,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { initSessionApi, getSessionsApi, removeSessionApi, setPresenceOnlineApi } from '../services/api';
+import { getSocket } from '../services/socket';
 
 export const useSessionStore = defineStore('sessions', () => {
     const sessions = ref({});
@@ -45,25 +46,35 @@ export const useSessionStore = defineStore('sessions', () => {
     const selectedSessionData = computed(() => currentSelectedSessionId.value ? sessions.value[currentSelectedSessionId.value] : null);
     const selectedSessionQrCode = computed(() => selectedSessionData.value?.qrCode || null);
 
-    // --- NEW ACTION FOR SOCKET.IO LISTENERS ---
+    // --- Function to handle QR code events from socket.js ---
+    function handleQrCodeEvent(data) {
+        if (data.sessionId && data.qr) {
+            updateSessionQr(data.sessionId, data.qr);
+        } else {
+            console.error('Socket RX [qr_code]: Received invalid data', data);
+            
+            // If we have sessionId but no QR, mark as waiting for QR
+            if (data.sessionId && sessions.value[data.sessionId]) {
+                sessions.value[data.sessionId] = {
+                    ...sessions.value[data.sessionId],
+                    hasQr: true,
+                    statusMessage: 'Waiting for QR code...'
+                };
+            }
+        }
+    }
+
     function initializeSocketListeners() {
         console.log("SessionStore: Initializing Socket.IO listeners...");
+        const socket = getSocket();
+        
+        if (!socket) {
+            console.error("Cannot initialize socket listeners: No socket available");
+            return;
+        }
 
-        socket.on('qrCode', (payload) => {
-            const { sessionId, qr } = payload;
-            console.log(`SessionStore: Socket 'qrCode' event received for ${sessionId}. QR present: ${!!qr}`);
-            if (qr) {
-                updateSessionQr(sessionId, qr);
-            } else {
-                // If QR is null/empty but we received an event, maybe clear existing QR if needed
-                updateSessionQr(sessionId, null);
-                // Also update status to reflect waiting if no QR string
-                if (sessions.value[sessionId]) {
-                     sessions.value[sessionId].statusMessage = 'Waiting QR...';
-                     sessions.value[sessionId].hasQr = true; // Still expecting one
-                }
-            }
-        });
+        // CORRECT EVENT NAME: 'qr_code' not 'qrCode'
+        socket.on('qr_code', handleQrCodeEvent);
 
         socket.on('session_ready', (payload) => {
             const { sessionId } = payload;
@@ -99,6 +110,27 @@ export const useSessionStore = defineStore('sessions', () => {
             const { sessionId, error } = payload;
             console.log(`SessionStore: Socket 'session_init_error' event received for ${sessionId}. Error: ${error}`);
             setSessionInitError(sessionId, error);
+        });
+        
+        // Also listen for status updates with QR codes
+        socket.on('status_update', (data) => {
+            if (data.sessionId && data.message) {
+                if (sessions.value[data.sessionId]) {
+                    sessions.value[data.sessionId].statusMessage = data.message;
+                }
+                else if(data.message.toLowerCase().includes("initialization started") || 
+                        data.message.toLowerCase().includes("qr code received")) {
+                    fetchSessions();
+                }
+                
+                // If the status update includes a QR code, update it
+                if(data.sessionId && data.qr !== undefined) {
+                    if(data.qr) updateSessionQr(data.sessionId, data.qr);
+                }
+            }
+            if (!data.sessionId && data.message) {
+                updateGlobalStatus(data.message);
+            }
         });
     }
 
@@ -153,6 +185,7 @@ export const useSessionStore = defineStore('sessions', () => {
             if (sessions.value[sessionId]) { // Check if session still exists after API call
                 if (response.success) {
                     globalStatusMessage.value = response.message || `Initialization for '${sessionId}' started.`;
+                    
                     // If QR is received directly from API response (less common for QR, more for status)
                     if (response.qr) {
                         updateSessionQr(sessionId, response.qr); // Use updateSessionQr to set the QR
@@ -165,10 +198,22 @@ export const useSessionStore = defineStore('sessions', () => {
                             statusMessage: 'Waiting QR...',
                             isReady: false
                         };
+                        
+                        // Request QR code via socket after initialization
+                        const socket = getSocket();
+                        if (socket && socket.connected) {
+                            socket.emit('request_init_session', sessionId);
+                            console.log(`Auto-requesting QR code for new session: ${sessionId}`);
+                        }
                     }
                 } else {
                     globalStatusMessage.value = `Error initializing '${sessionId}': ${response.error}`;
-                    sessions.value[sessionId] = { ...sessions.value[sessionId], statusMessage: `Init Error: ${response.error || ''}`, hasQr: false, qrCode: null };
+                    sessions.value[sessionId] = { 
+                        ...sessions.value[sessionId], 
+                        statusMessage: `Init Error: ${response.error || ''}`, 
+                        hasQr: false, 
+                        qrCode: null 
+                    };
                     return Promise.reject(new Error(response.error || 'Failed to initialize session'));
                 }
             } else { console.warn(`Session ${sessionId} was removed before init API call completed.`); }
@@ -176,10 +221,19 @@ export const useSessionStore = defineStore('sessions', () => {
             console.error(`Network error during init for '${sessionId}':`, error);
             globalStatusMessage.value = `Network error during init for '${sessionId}': ${error.message}`;
             if (sessions.value[sessionId]) {
-                sessions.value[sessionId] = { ...sessions.value[sessionId], statusMessage: 'Network Error during Init.', hasQr: false, qrCode: null };
+                sessions.value[sessionId] = { 
+                    ...sessions.value[sessionId], 
+                    statusMessage: 'Network Error during Init.', 
+                    hasQr: false, 
+                    qrCode: null 
+                };
             }
             return Promise.reject(error);
-        } finally { if (isProcessingSession.value === sessionId) { isProcessingSession.value = null; } }
+        } finally { 
+            if (isProcessingSession.value === sessionId) { 
+                isProcessingSession.value = null; 
+            } 
+        }
     }
 
     function updateSessionQr(sessionId, qr) {
@@ -191,7 +245,7 @@ export const useSessionStore = defineStore('sessions', () => {
             ...currentData,
             qrCode: qrValue,
             isReady: false, // QR means not ready yet
-            hasQr: !!qrValue // Set hasQr based on if a QR string is present
+            hasQr: qrValue ? true : currentData.hasQr // Keep hasQr true if we had it before
         };
         // Set status message based on QR presence
         if (qrValue) {
@@ -208,6 +262,7 @@ export const useSessionStore = defineStore('sessions', () => {
         console.log("Session data after QR update in store (from socket):", JSON.parse(JSON.stringify(sessions.value[sessionId])));
     }
 
+    // Rest of your methods...
     function setSessionAuthenticated(sessionId) {
         if (sessions.value[sessionId]) {
             sessions.value[sessionId] = { ...sessions.value[sessionId], qrCode: null, hasQr: true, isReady: false, statusMessage: 'Authenticated! Waiting for client to be ready...' };
@@ -259,6 +314,9 @@ export const useSessionStore = defineStore('sessions', () => {
     }
     function updateGlobalStatus(message) { globalStatusMessage.value = message; }
 
+    // Initialize socket listeners when the store is created
+    initializeSocketListeners();
+
     return {
         sessions, currentSelectedSessionId, globalStatusMessage, isLoadingSessions, isProcessingSession, quickSendRecipientId,
         sessionFeatureToggles, sessionList, selectedSessionData, selectedSessionQrCode,
@@ -266,6 +324,6 @@ export const useSessionStore = defineStore('sessions', () => {
         toggleTypingIndicator, toggleAutoSendSeen, toggleMaintainOnlinePresence,
         updateSessionQr, setSessionAuthenticated, setSessionReady, setSessionAuthFailure,
         handleSessionRemoved, setSessionDisconnected, setSessionInitError, updateGlobalStatus,
-        initializeSocketListeners // <--- EXPOSE THE NEW ACTION
+        initializeSocketListeners, handleQrCodeEvent
     };
 });
