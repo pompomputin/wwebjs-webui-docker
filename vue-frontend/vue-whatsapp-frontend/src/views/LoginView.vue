@@ -1,88 +1,120 @@
 <template>
-  <div class="flex items-center justify-center min-h-screen bg-slate-100 dark:bg-slate-900 px-4">
-    <div class="w-full max-w-md p-8 space-y-6 bg-white dark:bg-slate-800 rounded-lg shadow-xl">
-      <div class="text-center">
-        <svg class="mx-auto h-12 w-auto text-green-600 dark:text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 7.5V6.108c0-1.135.845-2.098 1.976-2.192.393-.03.79-.03 1.188 0 1.13.094 1.976 1.057 1.976 2.192V7.5M12 14.25a3.75 3.75 0 000-7.5m-3.75 7.5a3.75 3.75 0 01-7.5 0V11.25A2.25 2.25 0 013 9h.084c1.178 0 2.12.902 2.12 2.007v1.168c0 .449.193.86.504 1.143a1.125 1.125 0 101.06 1.716A4.5 4.5 0 0012 14.25zM12 14.25a4.5 4.5 0 004.496-3.75c.072-.495.148-.99.224-1.484A2.251 2.251 0 0118.75 9h.084c1.251 0 2.25.999 2.25 2.25v3.75a3.75 3.75 0 01-7.5 0V11.25A2.25 2.25 0 0112.75 9h-.084a2.25 2.25 0 00-2.12 2.007v1.168c0 .449.193.86.504 1.143a1.125 1.125 0 101.06 1.716A4.5 4.5 0 0012 14.25z" />
-        </svg>
-        <h2 class="mt-6 text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
-          Sign in to your account
-        </h2>
-        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          WhatsApp Multi-Device App
-        </p>
+  <div class="min-h-screen bg-gray-100 dark:bg-slate-900 flex flex-col justify-center items-center p-4">
+    <div class="bg-white dark:bg-slate-800 p-8 sm:p-10 rounded-xl shadow-2xl w-full max-w-md">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center mb-4">
+          <span class="bg-walazy-purple text-white text-2xl font-bold p-2 rounded-lg">W</span>
+          <h1 class="ml-3 text-3xl font-bold text-walazy-purple">WALazy</h1>
+        </div>
+        <p class="text-gray-600 dark:text-gray-300">Please sign-in to your account!</p>
       </div>
 
-      <form class="space-y-6" @submit.prevent="performLogin">
-        <div>
-          <label for="username" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
-          <div class="mt-1">
-            <input
-              id="username"
-              v-model="username"
-              name="username"
-              type="text"
-              autocomplete="username"
-              required
-              class="form-input"
-              placeholder="username"
-            />
-          </div>
+      <form @submit.prevent="performLogin">
+        <div class="mb-6">
+          <label for="username" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+          <input
+            type="text"
+            id="username"
+            v-model="username"
+            required
+            class="form-input block w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-walazy-purple dark:focus:ring-walazy-purple-light focus:border-walazy-purple dark:focus:border-walazy-purple-light sm:text-sm transition-colors duration-150 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 caret-walazy-purple"
+            placeholder="admin"
+          />
         </div>
 
-        <div>
-          <label for="password" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-          <div class="mt-1">
+        <div class="mb-4">
+          <label for="password" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+          <div class="relative">
             <input
+              :type="showPassword ? 'text' : 'password'"
               id="password"
               v-model="password"
-              name="password"
-              type="password"
-              autocomplete="current-password"
               required
-              class="form-input"
-              placeholder="password"
+              class="form-input block w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-walazy-purple dark:focus:ring-walazy-purple-light focus:border-walazy-purple dark:focus:border-walazy-purple-light sm:text-sm transition-colors duration-150 bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 caret-walazy-purple"
+              placeholder="••••••••"
             />
+            <button
+              type="button"
+              @click="togglePasswordVisibility"
+              class="absolute inset-y-0 right-0 pr-3 flex items-center text-sm leading-5 text-gray-500 dark:text-gray-400 hover:text-walazy-purple dark:hover:text-walazy-purple-light"
+              aria-label="Toggle password visibility"
+            >
+              <EyeIcon v-if="!showPassword" class="h-5 w-5" />
+              <EyeSlashIcon v-else class="h-5 w-5" />
+            </button>
           </div>
         </div>
 
-        <div v-if="authStore.loginError" class="rounded-md bg-red-50 dark:bg-red-900/30 p-3">
-          <div class="flex">
-            <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-red-400 dark:text-red-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
-              </svg>
-            </div>
-            <div class="ml-3">
-              <p class="text-sm text-red-700 dark:text-red-400">{{ authStore.loginError }}</p>
-            </div>
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center">
+            <input
+              id="remember-me"
+              name="remember-me"
+              type="checkbox"
+              v-model="rememberMe"
+              class="h-4 w-4 text-walazy-purple border-gray-300 dark:border-slate-600 rounded focus:ring-walazy-purple dark:focus:ring-offset-slate-800 bg-slate-50 dark:bg-slate-700"
+            />
+            <label for="remember-me" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+              Remember Me
+            </label>
           </div>
+          </div>
+
+        <div v-if="authStore.loginError" class="mb-4 p-3 bg-red-100 dark:bg-red-700 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-200 rounded-md text-sm">
+          {{ authStore.loginError }}
         </div>
 
         <div>
           <button
             type="submit"
-            class="btn btn-indigo w-full"
             :disabled="authStore.isLoading"
+            class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-md text-sm font-medium text-white bg-walazy-purple hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-walazy-purple dark:focus:ring-offset-slate-800 disabled:opacity-50 transition ease-in-out duration-150 transform active:scale-95"
           >
-            {{ authStore.isLoading ? 'Signing in...' : 'Sign in' }}
+            <svg v-if="authStore.isLoading" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {{ authStore.isLoading ? 'Signing In...' : 'Sign In' }}
           </button>
         </div>
       </form>
     </div>
-  </div>
+
+    </div>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import { useAuthStore } from '@/stores/authStore'; // Adjust path if needed
+import { useAuthStore } from '@/stores/authStore'; //
+import { EyeIcon, EyeSlashIcon } from '@heroicons/vue/24/outline';
+// import { useRouter } from 'vue-router'; // Uncomment if you need programmatic navigation after login, though authStore handles it.
 
-const username = ref(''); // Pre-fill for convenience during development
+const authStore = useAuthStore(); //
+// const router = useRouter(); // Uncomment if needed
+
+const username = ref('');
 const password = ref('');
-const authStore = useAuthStore();
+const rememberMe = ref(false); // If you implement "Remember Me"
+const showPassword = ref(false);
 
-async function performLogin() {
+const performLogin = async () => {
   await authStore.login({ username: username.value, password: password.value });
-  // The store's login action will handle redirection or error display
-}
+  // The authStore's login action already handles routing on success.
+};
+
+const togglePasswordVisibility = () => {
+  showPassword.value = !showPassword.value;
+};
 </script>
+
+<style scoped>
+/* Add any component-specific styles here if Tailwind utilities aren't enough. */
+/* For the subtle dashed background elements, you might need something like this (and uncomment the HTML): */
+/*
+. -z-10 {
+  z-index: -1;
+}
+If using dashed SVGs or more complex shapes for those background elements,
+they would be handled differently. For now, focusing on the card.
+*/
+</style>

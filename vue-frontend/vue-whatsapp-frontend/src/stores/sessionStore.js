@@ -4,117 +4,268 @@ import { ref, computed } from 'vue';
 import { initSessionApi, getSessionsApi, removeSessionApi, setPresenceOnlineApi } from '../services/api';
 
 export const useSessionStore = defineStore('sessions', () => {
-    const sessions = ref({}); 
+    const sessions = ref({});
     const currentSelectedSessionId = ref(null);
     const globalStatusMessage = ref('Manage your sessions.');
     const isLoadingSessions = ref(false);
+    const isProcessingSession = ref(null);
     const quickSendRecipientId = ref(null);
 
-    // NEW: Toggle states for the currently selected session
     const sessionFeatureToggles = ref({
         isTypingIndicatorEnabled: false,
         autoSendSeenEnabled: false,
         maintainOnlinePresenceEnabled: false,
     });
 
-    const sessionList = computed(() => Object.entries(sessions.value).map(([id, data]) => ({ sessionId: id, isReady: data.isReady || false, hasQr: data.hasQr || !!data.qrCode, qrCode: data.qrCode || null, statusMessage: data.statusMessage || (data.isReady ? 'Ready' : (data.hasQr || data.qrCode ? 'Needs QR Scan' : 'Initializing...')) })));
+    const sessionList = computed(() => {
+        console.log("sessionStore: Recomputing sessionList. Current raw sessions data:", JSON.parse(JSON.stringify(sessions.value)));
+        return Object.entries(sessions.value).map(([id, data]) => {
+            // Ensure qrCode is always a string or null
+            const qrCodeValue = data.qrCode || null;
+            const qrCodeIsPresent = !!qrCodeValue && qrCodeValue.length > 0;
+            const effectiveHasQr = data.hasQr || qrCodeIsPresent; // hasQr indicates expectation, qrCodeIsPresent indicates actual data
+
+            let derivedStatusMessage = data.statusMessage;
+            if (!derivedStatusMessage) {
+                if (data.isReady) { derivedStatusMessage = 'Client Ready!'; }
+                else if (qrCodeIsPresent) { derivedStatusMessage = 'QR. Scan.'; }
+                else if (effectiveHasQr) { derivedStatusMessage = 'Waiting QR...'; }
+                else { derivedStatusMessage = 'Initializing...'; }
+            }
+            return {
+                sessionId: id,
+                isReady: data.isReady || false,
+                hasQr: effectiveHasQr, // Reflects if QR is expected or present
+                qrCode: qrCodeValue,   // Holds the actual QR string
+                statusMessage: derivedStatusMessage
+            };
+        });
+    });
+
     const selectedSessionData = computed(() => currentSelectedSessionId.value ? sessions.value[currentSelectedSessionId.value] : null);
     const selectedSessionQrCode = computed(() => selectedSessionData.value?.qrCode || null);
 
-    async function fetchSessions() { 
+    // --- NEW ACTION FOR SOCKET.IO LISTENERS ---
+    function initializeSocketListeners() {
+        console.log("SessionStore: Initializing Socket.IO listeners...");
+
+        socket.on('qrCode', (payload) => {
+            const { sessionId, qr } = payload;
+            console.log(`SessionStore: Socket 'qrCode' event received for ${sessionId}. QR present: ${!!qr}`);
+            if (qr) {
+                updateSessionQr(sessionId, qr);
+            } else {
+                // If QR is null/empty but we received an event, maybe clear existing QR if needed
+                updateSessionQr(sessionId, null);
+                // Also update status to reflect waiting if no QR string
+                if (sessions.value[sessionId]) {
+                     sessions.value[sessionId].statusMessage = 'Waiting QR...';
+                     sessions.value[sessionId].hasQr = true; // Still expecting one
+                }
+            }
+        });
+
+        socket.on('session_ready', (payload) => {
+            const { sessionId } = payload;
+            console.log(`SessionStore: Socket 'session_ready' event received for ${sessionId}`);
+            setSessionReady(sessionId);
+        });
+
+        socket.on('session_authenticated', (payload) => {
+            const { sessionId } = payload;
+            console.log(`SessionStore: Socket 'session_authenticated' event received for ${sessionId}`);
+            setSessionAuthenticated(sessionId);
+        });
+
+        socket.on('session_disconnected', (payload) => {
+            const { sessionId, reason } = payload;
+            console.log(`SessionStore: Socket 'session_disconnected' event received for ${sessionId}. Reason: ${reason}`);
+            setSessionDisconnected(sessionId, reason);
+        });
+
+        socket.on('session_auth_failure', (payload) => {
+            const { sessionId, message } = payload;
+            console.log(`SessionStore: Socket 'session_auth_failure' event received for ${sessionId}. Message: ${message}`);
+            setSessionAuthFailure(sessionId, message);
+        });
+
+        socket.on('session_removed', (payload) => {
+            const { sessionId } = payload;
+            console.log(`SessionStore: Socket 'session_removed' event received for ${sessionId}`);
+            handleSessionRemoved(sessionId);
+        });
+
+        socket.on('session_init_error', (payload) => {
+            const { sessionId, error } = payload;
+            console.log(`SessionStore: Socket 'session_init_error' event received for ${sessionId}. Error: ${error}`);
+            setSessionInitError(sessionId, error);
+        });
+    }
+
+    async function fetchSessions() {
         isLoadingSessions.value = true; globalStatusMessage.value = 'Fetching sessions...';
-        const response = await getSessionsApi();
-        if (response.success && response.sessions) {
-            const newSessionsState = {};
-            response.sessions.forEach(s => {
-                newSessionsState[s.sessionId] = {
-                    ...(sessions.value[s.sessionId] || {}), 
-                    isReady: s.isReady,
-                    hasQrFromBackend: s.hasQr, 
-                    statusMessage: sessions.value[s.sessionId]?.statusMessage || (s.isReady ? 'Ready' : (s.hasQr ? 'Needs QR Scan' : 'Initializing...'))
-                };
-            });
-            sessions.value = newSessionsState; globalStatusMessage.value = 'Sessions loaded.';
-        } else { globalStatusMessage.value = `Error fetching: ${response.error || 'Unknown'}`; }
-        isLoadingSessions.value = false;
+        try {
+            const response = await getSessionsApi();
+            if (response.success && response.sessions) {
+                const newSessionsState = {};
+                response.sessions.forEach(s => {
+                    const existingClientSession = sessions.value[s.sessionId] || {};
+                    // When fetching, prioritize current QR if available, otherwise backend's
+                    const qrCodeValue = existingClientSession.qrCode || s.qrCode || null; // <--- Keep existing QR if present
+                    const qrCodeIsPresent = !!qrCodeValue && qrCodeValue.length > 0;
+                    const effectiveHasQr = s.hasQr || qrCodeIsPresent || existingClientSession.hasQr || false;
+
+                    newSessionsState[s.sessionId] = {
+                        ...existingClientSession, // Keep any client-side specific ephemeral data
+                        isReady: s.isReady,
+                        hasQr: effectiveHasQr,
+                        qrCode: (s.isReady || (!s.hasQr && !qrCodeIsPresent && !existingClientSession.qrCode)) ? null : qrCodeValue, // Clear QR if ready or no QR expected/present
+                        statusMessage: s.isReady ? 'Client Ready!' : (effectiveHasQr ? (qrCodeValue ? 'QR. Scan.' : 'Needs QR Scan') : (s.statusMessage || 'Initializing...'))
+                    };
+                });
+                sessions.value = newSessionsState;
+                globalStatusMessage.value = 'Sessions loaded.';
+            } else { globalStatusMessage.value = `Error fetching sessions: ${response.error || 'Unknown error'}`; }
+        } catch (error) {
+            globalStatusMessage.value = `Network error fetching sessions: ${error.message}`;
+            console.error("Network error in fetchSessions:", error);
+        } finally { isLoadingSessions.value = false; }
     }
-    async function addNewSession(sessionId) { 
-        if (!sessionId || sessions.value[sessionId]) { globalStatusMessage.value = `ID empty or '${sessionId}' exists.`; return; }
-        globalStatusMessage.value = `Initializing '${sessionId}'...`;
-        sessions.value[sessionId] = { isReady: false, hasQr: true, qrCode: null, statusMessage: 'Init...' }; 
-        const response = await initSessionApi(sessionId);
-        if (response.success) { globalStatusMessage.value = response.message || `Init for '${sessionId}' started.`; if (response.qr) updateSessionQr(sessionId, response.qr); } 
-        else { globalStatusMessage.value = `Error init '${sessionId}': ${response.error}`; delete sessions.value[sessionId]; }
+
+    async function addNewSession(sessionId) {
+        if (!sessionId) {
+            globalStatusMessage.value = 'Session ID cannot be empty.';
+            return Promise.reject(new Error('Session ID cannot be empty.'));
+        }
+        const isExistingSession = !!sessions.value[sessionId];
+        isProcessingSession.value = sessionId;
+        globalStatusMessage.value = isExistingSession ? `Re-initializing '${sessionId}'...` : `Initializing '${sessionId}'...`;
+
+        // Initialize session in store with basic status
+        sessions.value[sessionId] = {
+            ...(sessions.value[sessionId] || { sessionId: sessionId }),
+            isReady: false, hasQr: false, qrCode: null, // Reset QR state when initializing
+            statusMessage: isExistingSession ? 'Re-initializing (API)...' : 'Initializing (API)...'
+        };
+
+        try {
+            const response = await initSessionApi(sessionId);
+            if (sessions.value[sessionId]) { // Check if session still exists after API call
+                if (response.success) {
+                    globalStatusMessage.value = response.message || `Initialization for '${sessionId}' started.`;
+                    // If QR is received directly from API response (less common for QR, more for status)
+                    if (response.qr) {
+                        updateSessionQr(sessionId, response.qr); // Use updateSessionQr to set the QR
+                        globalStatusMessage.value = `QR received for '${sessionId}'. Scan.`;
+                    } else {
+                        // Assume hasQr is true if init was successful and no QR was given yet
+                        sessions.value[sessionId] = {
+                            ...sessions.value[sessionId],
+                            hasQr: true, // Expecting QR
+                            statusMessage: 'Waiting QR...',
+                            isReady: false
+                        };
+                    }
+                } else {
+                    globalStatusMessage.value = `Error initializing '${sessionId}': ${response.error}`;
+                    sessions.value[sessionId] = { ...sessions.value[sessionId], statusMessage: `Init Error: ${response.error || ''}`, hasQr: false, qrCode: null };
+                    return Promise.reject(new Error(response.error || 'Failed to initialize session'));
+                }
+            } else { console.warn(`Session ${sessionId} was removed before init API call completed.`); }
+        } catch (error) {
+            console.error(`Network error during init for '${sessionId}':`, error);
+            globalStatusMessage.value = `Network error during init for '${sessionId}': ${error.message}`;
+            if (sessions.value[sessionId]) {
+                sessions.value[sessionId] = { ...sessions.value[sessionId], statusMessage: 'Network Error during Init.', hasQr: false, qrCode: null };
+            }
+            return Promise.reject(error);
+        } finally { if (isProcessingSession.value === sessionId) { isProcessingSession.value = null; } }
     }
-    
-    function selectSession(sessionId) { 
-        if (sessions.value[sessionId]) { 
-            currentSelectedSessionId.value = sessionId; 
-            globalStatusMessage.value = `Selected: ${sessionId}`; 
-            quickSendRecipientId.value = null;
-            // Reset toggles when session changes
-            sessionFeatureToggles.value = {
-                isTypingIndicatorEnabled: false,
-                autoSendSeenEnabled: false,
-                maintainOnlinePresenceEnabled: false,
-            };
-        } else { 
-            currentSelectedSessionId.value = null; 
-            globalStatusMessage.value = 'Session not found.'; 
-            quickSendRecipientId.value = null; 
-            sessionFeatureToggles.value = { isTypingIndicatorEnabled: false, autoSendSeenEnabled: false, maintainOnlinePresenceEnabled: false };
+
+    function updateSessionQr(sessionId, qr) {
+        console.log(`SessionStore: SOCKET updateSessionQr for ${sessionId}. QR value received: ${!!qr}`);
+        const currentData = sessions.value[sessionId] || { sessionId: sessionId };
+        // Ensure qrCode is null if qr is empty/falsey, otherwise use the qr string
+        const qrValue = qr && qr.length > 0 ? qr : null;
+        const updatedSession = {
+            ...currentData,
+            qrCode: qrValue,
+            isReady: false, // QR means not ready yet
+            hasQr: !!qrValue // Set hasQr based on if a QR string is present
+        };
+        // Set status message based on QR presence
+        if (qrValue) {
+            updatedSession.statusMessage = 'QR. Scan.';
+        } else if (updatedSession.hasQr) {
+            updatedSession.statusMessage = 'Waiting QR...';
+        } else {
+            updatedSession.statusMessage = 'Initializing...'; // Fallback if no QR and no hasQr
+        }
+
+        const newSessionsState = { ...sessions.value };
+        newSessionsState[sessionId] = updatedSession;
+        sessions.value = newSessionsState; // Force update by replacing the whole object
+        console.log("Session data after QR update in store (from socket):", JSON.parse(JSON.stringify(sessions.value[sessionId])));
+    }
+
+    function setSessionAuthenticated(sessionId) {
+        if (sessions.value[sessionId]) {
+            sessions.value[sessionId] = { ...sessions.value[sessionId], qrCode: null, hasQr: true, isReady: false, statusMessage: 'Authenticated! Waiting for client to be ready...' };
         }
     }
-    async function removeSession(sessionId) { 
-        if (!sessions.value[sessionId]) return; 
-        globalStatusMessage.value = `Removing '${sessionId}'...`; 
-        const response = await removeSessionApi(sessionId); 
-        if (response.success) { globalStatusMessage.value = response.message || `Session '${sessionId}' removal initiated.`; } 
-        else { globalStatusMessage.value = `Error removing '${sessionId}': ${response.error}`;}}
-    
+    function setSessionReady(sessionId) {
+        if (sessions.value[sessionId]) {
+            sessions.value[sessionId] = { ...sessions.value[sessionId], isReady: true, qrCode: null, hasQr: false, statusMessage: 'Client Ready!' };
+        }
+    }
+    function setSessionAuthFailure(sessionId, message) {
+        if (sessions.value[sessionId]) {
+            sessions.value[sessionId] = { ...sessions.value[sessionId], isReady: false, qrCode: null, hasQr: false, statusMessage: `Auth Fail: ${message}` };
+        }
+    }
+    function handleSessionRemoved(sessionId) {
+        const newSessions = { ...sessions.value }; delete newSessions[sessionId]; sessions.value = newSessions;
+        if (currentSelectedSessionId.value === sessionId) { /* reset dependent state */ currentSelectedSessionId.value = null; globalStatusMessage.value = `Session ${sessionId} removed.`; quickSendRecipientId.value = null; sessionFeatureToggles.value = { isTypingIndicatorEnabled: false, autoSendSeenEnabled: false, maintainOnlinePresenceEnabled: false }; }
+    }
+    function setSessionDisconnected(sessionId, reason) {
+        if (sessions.value[sessionId]) { sessions.value[sessionId] = { ...sessions.value[sessionId], isReady: false, statusMessage: `Disconnected: ${reason}` }; }
+    }
+    function setSessionInitError(sessionId, errorMsg) {
+        if (sessions.value[sessionId]) { sessions.value[sessionId] = { ...sessions.value[sessionId], isReady: false, hasQr: false, qrCode: null, statusMessage: `Init Err: ${errorMsg}` }; }
+        else { sessions.value[sessionId] = { sessionId: sessionId, isReady: false, hasQr: false, qrCode: null, statusMessage: `Init Err: ${errorMsg}` }; }
+    }
+    function selectSession(sessionId) {
+        if (sessionId === null || sessions.value[sessionId]) { currentSelectedSessionId.value = sessionId; globalStatusMessage.value = sessionId ? `Selected: ${sessionId}` : 'No session selected.'; quickSendRecipientId.value = null; sessionFeatureToggles.value = { isTypingIndicatorEnabled: false, autoSendSeenEnabled: false, maintainOnlinePresenceEnabled: false, }; }
+        else { currentSelectedSessionId.value = null; globalStatusMessage.value = 'Session not found for selection.'; quickSendRecipientId.value = null; sessionFeatureToggles.value = { isTypingIndicatorEnabled: false, autoSendSeenEnabled: false, maintainOnlinePresenceEnabled: false }; }
+    }
+    async function removeSession(sessionId) {
+        if (!sessions.value[sessionId]) return; globalStatusMessage.value = `Removing '${sessionId}'...`; isProcessingSession.value = sessionId;
+        try { const response = await removeSessionApi(sessionId); if (response.success) { globalStatusMessage.value = response.message || `Session '${sessionId}' removal initiated.`; } else { globalStatusMessage.value = `Error removing '${sessionId}': ${response.error}`; }
+        } catch (error) { globalStatusMessage.value = `Network error removing '${sessionId}': ${error.message}`; console.error(`Network error in removeSession for ${sessionId}:`, error);
+        } finally { if (isProcessingSession.value === sessionId) { isProcessingSession.value = null; } }
+    }
     function setQuickSendRecipient(recipientId) { quickSendRecipientId.value = recipientId; }
-
-    function toggleTypingIndicator(enabled) {
-        sessionFeatureToggles.value.isTypingIndicatorEnabled = typeof enabled === 'boolean' ? enabled : !sessionFeatureToggles.value.isTypingIndicatorEnabled;
-    }
-    function toggleAutoSendSeen(enabled) {
-        sessionFeatureToggles.value.autoSendSeenEnabled = typeof enabled === 'boolean' ? enabled : !sessionFeatureToggles.value.autoSendSeenEnabled;
-    }
+    function toggleTypingIndicator(enabled) { sessionFeatureToggles.value.isTypingIndicatorEnabled = typeof enabled === 'boolean' ? enabled : !sessionFeatureToggles.value.isTypingIndicatorEnabled; }
+    function toggleAutoSendSeen(enabled) { sessionFeatureToggles.value.autoSendSeenEnabled = typeof enabled === 'boolean' ? enabled : !sessionFeatureToggles.value.autoSendSeenEnabled; }
     async function toggleMaintainOnlinePresence(enabled) {
         const shouldBeEnabled = typeof enabled === 'boolean' ? enabled : !sessionFeatureToggles.value.maintainOnlinePresenceEnabled;
-        sessionFeatureToggles.value.maintainOnlinePresenceEnabled = shouldBeEnabled;
         if (shouldBeEnabled && currentSelectedSessionId.value && selectedSessionData.value?.isReady) {
-            globalStatusMessage.value = `Setting ${currentSelectedSessionId.value} to online...`;
+            sessionFeatureToggles.value.maintainOnlinePresenceEnabled = true; globalStatusMessage.value = `Setting ${currentSelectedSessionId.value} to online...`;
             const result = await setPresenceOnlineApi(currentSelectedSessionId.value);
-            if (result.success) {
-                globalStatusMessage.value = `Session ${currentSelectedSessionId.value} presence set to online.`;
-            } else {
-                globalStatusMessage.value = `Error setting presence for ${currentSelectedSessionId.value}: ${result.error}`;
-                sessionFeatureToggles.value.maintainOnlinePresenceEnabled = false; 
-            }
-        } else if (!shouldBeEnabled && currentSelectedSessionId.value) { // Only log if a session was selected
-            globalStatusMessage.value = `Online presence maintenance disabled for ${currentSelectedSessionId.value}.`;
-        }
+            if (result.success) { globalStatusMessage.value = `Session ${currentSelectedSessionId.value} presence set to online.`; }
+            else { globalStatusMessage.value = `Error setting presence for ${currentSelectedSessionId.value}: ${result.error}`; sessionFeatureToggles.value.maintainOnlinePresenceEnabled = false; }
+        } else if (!shouldBeEnabled && currentSelectedSessionId.value) { sessionFeatureToggles.value.maintainOnlinePresenceEnabled = false; globalStatusMessage.value = `Online presence maintenance disabled for ${currentSelectedSessionId.value}.`;
+        } else if (shouldBeEnabled && (!currentSelectedSessionId.value || !selectedSessionData.value?.isReady)) { globalStatusMessage.value = `Cannot enable online presence: No session selected or session not ready.`; }
     }
-
-    function updateSessionQr(sessionId, qr) { const s=sessions.value[sessionId]||{}; sessions.value[sessionId]={...s,qrCode:qr,isReady:false,hasQr:true,statusMessage:'QR. Scan.'};}
-    function setSessionAuthenticated(sessionId) { const s=sessions.value[sessionId]; if(s) {s.qrCode=null;s.hasQr=false;s.statusMessage='Authenticated! Wait ready...';}}
-    function setSessionReady(sessionId) { const s=sessions.value[sessionId]; if(s) {s.isReady=true;s.qrCode=null;s.hasQr=false;s.statusMessage='Client Ready!';}}
-    function setSessionAuthFailure(sessionId, message) { const s=sessions.value[sessionId]; if(s) {s.isReady=false;s.qrCode=null;s.hasQr=false;s.statusMessage=`Auth Fail: ${message}`}}
-    function handleSessionRemoved(sessionId) { delete sessions.value[sessionId]; if(currentSelectedSessionId.value===sessionId){currentSelectedSessionId.value=null;globalStatusMessage.value=`Sess ${sessionId} removed.`; quickSendRecipientId.value = null; sessionFeatureToggles.value = {isTypingIndicatorEnabled: false, autoSendSeenEnabled: false, maintainOnlinePresenceEnabled: false};}}
-    function setSessionDisconnected(sessionId, reason) { const s=sessions.value[sessionId]; if(s){s.isReady=false;s.statusMessage=`Disconnected: ${reason}`;}}
-    function setSessionInitError(sessionId, errorMsg) { const s=sessions.value[sessionId]; if(s)s.statusMessage=`Init Err: ${errorMsg}`; else console.error(`Init err for unknown sess ${sessionId}: ${errorMsg}`);}
-    function updateGlobalStatus(message){ globalStatusMessage.value = message; }
+    function updateGlobalStatus(message) { globalStatusMessage.value = message; }
 
     return {
-        sessions, currentSelectedSessionId, globalStatusMessage, isLoadingSessions,
-        quickSendRecipientId, 
-        sessionFeatureToggles, 
-        sessionList, selectedSessionData, selectedSessionQrCode,
-        fetchSessions, addNewSession, selectSession, removeSession,
-        setQuickSendRecipient, 
-        toggleTypingIndicator, toggleAutoSendSeen, toggleMaintainOnlinePresence, 
+        sessions, currentSelectedSessionId, globalStatusMessage, isLoadingSessions, isProcessingSession, quickSendRecipientId,
+        sessionFeatureToggles, sessionList, selectedSessionData, selectedSessionQrCode,
+        fetchSessions, addNewSession, selectSession, removeSession, setQuickSendRecipient,
+        toggleTypingIndicator, toggleAutoSendSeen, toggleMaintainOnlinePresence,
         updateSessionQr, setSessionAuthenticated, setSessionReady, setSessionAuthFailure,
-        handleSessionRemoved, setSessionDisconnected, setSessionInitError, updateGlobalStatus
+        handleSessionRemoved, setSessionDisconnected, setSessionInitError, updateGlobalStatus,
+        initializeSocketListeners // <--- EXPOSE THE NEW ACTION
     };
 });

@@ -140,8 +140,10 @@ function createWhatsappSession(sessionId) {
 
     client.on('qr', (qr) => {
         console.log(`[${sessionId}] QR RECEIVED`);
-        qrCodes[sessionId] = qr; clientReadyStatus[sessionId] = false;
-        io.to(sessionId).emit('qr_code', { sessionId, qr });
+        qrCodes[sessionId] = qr;
+        console.log(`[${sessionId}] Stored QR: ${qr ? qr.substring(0, 30) + '...' : 'NULL'}`); // Log the QR
+        clientReadyStatus[sessionId] = false;
+		io.to(sessionId).emit('qr_code', { sessionId, qr });
         io.emit('status_update', { sessionId, message: 'QR code received. Scan.', qr });
     });
     client.on('authenticated', () => {

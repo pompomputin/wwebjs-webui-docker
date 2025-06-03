@@ -7,7 +7,13 @@ export default {
     "./src/**/*.{vue,js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        'walazy-purple': '#8B5CF6', // Updated to a lighter, more vibrant purple
+        'walazy-purple-light': '#A181F8', // Adjusted lighter shade (you can fine-tune)
+        // You can add more custom colors here as we identify them
+      }
+    },
   },
-  plugins: [], // Keep this empty unless you add specific v3 plugins later
+  plugins: [],
 }
