@@ -4,19 +4,22 @@ import LoginView from '../views/LoginView.vue';
 import MainLayout from '../layouts/MainLayout.vue';
 
 // --- Feature Panels ---
-// Existing Panels (to be restyled)
 import BulkSendPanel from '../components/features/BulkSendPanel.vue';
 import BulkCheckNumbersPanel from '../components/features/BulkCheckNumbersPanel.vue';
-
-// New Panels (currently stubs)
-import DashboardHomePanel from '../components/features/DashboardHomePanel.vue'; // For the main device list view
-import SingleSenderPanel from '../components/features/SingleSenderPanel.vue'; // <--- Ensure this line is correct
+import DashboardHomePanel from '../components/features/DashboardHomePanel.vue';
+import SingleSenderPanel from '../components/features/SingleSenderPanel.vue';
 import AutoRespondersPanel from '../components/features/AutoRespondersPanel.vue';
 import PhoneBookPanel from '../components/features/PhoneBookPanel.vue';
 import RestApiPanel from '../components/features/RestApiPanel.vue';
 import HistoryMessagePanel from '../components/features/HistoryMessagePanel.vue';
 import FileManagerPanel from '../components/features/FileManagerPanel.vue';
 import AdminMenuPanel from '../components/features/AdminMenuPanel.vue';
+
+// NEW: Placeholder components for new menu items
+import PluginsIntegrationPanel from '../components/features/PluginsIntegrationPanel.vue';
+import MessageTemplatePanel from '../components/features/MessageTemplatePanel.vue';
+import WebhookWorkflowPanel from '../components/features/WebhookWorkflowPanel.vue';
+
 
 import { useAuthStore } from '@/stores/authStore.js';
 
@@ -37,7 +40,6 @@ const routes = [
         name: 'dashboardHome',
         component: DashboardHomePanel,
       },
-      // --- MAIN Menu Routes ---
       {
         path: 'auto-responders',
         name: 'autoResponders',
@@ -54,7 +56,7 @@ const routes = [
         component: BulkSendPanel,
       },
       {
-        path: 'single-sender', // <--- This route will now use the merged panel
+        path: 'single-sender',
         name: 'singleSender',
         component: SingleSenderPanel,
       },
@@ -73,7 +75,24 @@ const routes = [
         name: 'historyMessage',
         component: HistoryMessagePanel,
       },
-      // --- OTHER Menu Routes ---
+      // NEW: Routes for new menu items
+      {
+        path: 'plugins-integration',
+        name: 'pluginsIntegration',
+        component: PluginsIntegrationPanel,
+      },
+      {
+        path: 'message-template',
+        name: 'messageTemplate',
+        component: MessageTemplatePanel,
+      },
+      {
+        path: 'webhook-workflow',
+        name: 'webhookWorkflow',
+        component: WebhookWorkflowPanel,
+      },
+      // END NEW ROUTES
+
       {
         path: 'file-manager',
         name: 'fileManager',

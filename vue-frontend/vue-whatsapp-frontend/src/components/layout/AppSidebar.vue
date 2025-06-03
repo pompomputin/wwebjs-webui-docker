@@ -1,188 +1,211 @@
 <template>
-  <aside class="w-64 flex-shrink-0 bg-white dark:bg-slate-800 p-4 space-y-4 border-r border-gray-200 dark:border-slate-700 flex flex-col">
-    <div class="flex items-center space-x-2 px-2 py-3">
-      <router-link to="/" class="flex items-center space-x-2 focus:outline-none">
-        <span class="bg-walazy-purple text-white text-2xl font-bold p-2 rounded-lg flex items-center justify-center w-10 h-10">W</span>
-        <span class="text-xl font-semibold text-gray-700 dark:text-gray-200">WALazy</span>
-      </router-link>
+  <aside
+    class="fixed inset-y-0 left-0 w-64 bg-white dark:bg-slate-800 shadow-lg transform transition-transform duration-300 ease-in-out z-50 flex flex-col"
+    :class="{ '-translate-x-full': !isOpen }"
+  >
+    <div class="flex items-center justify-between p-4 border-b border-gray-200 dark:border-slate-700">
+      <div class="flex items-center">
+        <img src="/logo.png" alt="WALazy Logo" class="h-8 w-auto mr-3" />
+        <span class="text-xl font-bold text-gray-800 dark:text-gray-200">WALazy</span>
+      </div>
+      <button v-if="isMobile" @click="$emit('toggle-sidebar')" class="text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100 focus:outline-none">
+        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
     </div>
 
-    <nav class="flex-1 flex flex-col">
-      <router-link
-        to="/"
-        class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-walazy-purple hover:text-white dark:hover:bg-walazy-purple"
-        active-class="bg-walazy-purple text-white dark:bg-walazy-purple"
+    <div class="p-4 border-b border-gray-200 dark:border-slate-700">
+      <div class="flex items-center text-sm font-semibold text-gray-700 dark:text-gray-200 mb-2">
+        <span class="mr-2 px-3 py-1 rounded-full text-xs font-bold"
+              :class="{'bg-green-200 text-green-800 dark:bg-green-700 dark:text-green-100': isConnected,
+                       'bg-red-200 text-red-800 dark:bg-red-700 dark:text-red-100': !isConnected}">
+          {{ isConnected ? 'SERVER - CONNECTED' : 'SERVER - DISCONNECTED' }}
+        </span>
+      </div>
+      <div class="flex flex-col items-start space-y-1 text-sm">
+        <div class="text-gray-500 dark:text-gray-400 text-sm">Devices</div>
+        <div class="flex items-baseline space-x-1">
+          <span class="text-green-500 font-bold text-lg">{{ sessionStore.sessionList.length }}</span>
+          <span class="text-gray-600 dark:text-gray-300 text-sm">({{ onlineSessionsCount }} Online)</span>
+        </div>
+        <span class="text-gray-500 dark:text-gray-400 text-xs mt-1">Limit Device: Unlimited</span>
+      </div>
+    </div>
+
+    <div class="p-4 border-b border-gray-200 dark:border-slate-700">
+      <select
+        v-model="selectedSessionId"
+        @change="selectSession"
+        class="form-select w-full"
+        :class="{ 'border-red-500': !sessionStore.currentSelectedSessionId }"
       >
-        <SquaresPlusIcon class="h-6 w-6" />
-        <span>Dashboard</span>
+        <option :value="null" disabled>-- Select Device --</option>
+        <option
+          v-for="session in sessionStore.sessionList"
+          :key="session.sessionId"
+          :value="session.sessionId"
+        >
+          {{ session.sessionId }}
+        </option>
+      </select>
+      <p v-if="sessionStore.currentSelectedSessionId" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        Status: {{ sessionStore.selectedSessionData?.statusMessage || 'Loading...' }}
+      </p>
+    </div>
+
+    <nav class="flex-grow p-4 space-y-2 custom-scrollbar overflow-y-auto">
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">MAIN</p>
+      <router-link
+        v-for="item in mainMenuItems"
+        :key="item.name"
+        :to="{ name: item.route }"
+        class="flex items-center px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors duration-150"
+        :class="{ 'bg-walazy-purple text-white dark:bg-walazy-purple-light dark:text-slate-900': $route.name === item.route }"
+      >
+        <component :is="item.icon" class="h-5 w-5 mr-3" />
+        <span>{{ item.label }}</span>
       </router-link>
 
-      <div class="mt-4 mb-2 px-1">
-        <label for="device-selector" class="sr-only">Select Device</label>
-        <select
-          id="device-selector"
-          v-model="selectedSessionId"
-          @change="onSessionSelect"
-          class="block w-full px-3 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-walazy-purple focus:border-walazy-purple sm:text-sm bg-gray-50 dark:bg-slate-700 text-gray-700 dark:text-gray-300"
-          :class="{ 'text-gray-500 dark:text-gray-400': !selectedSessionId }"
-        >
-          <option :value="null" disabled>-- Select Device --</option>
-          <option v-if="sessionStore.isLoadingSessions" :value="null" disabled>Loading sessions...</option>
-          <option v-for="session in sessionStore.sessionList" :key="session.sessionId" :value="session.sessionId">
-            {{ session.sessionId }} </option>
-          <option v-if="!sessionStore.isLoadingSessions && sessionStore.sessionList.length === 0" :value="null" disabled>No active sessions</option>
-        </select>
-      </div>
-
-      <div class="mt-4">
-        <h3 class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          Main
-        </h3>
-        <div class="mt-2 space-y-1">
-          <router-link
-            v-for="item in mainMenu"
-            :key="item.name"
-            :to="item.to"
-            class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-walazy-purple hover:text-white dark:hover:bg-walazy-purple"
-            active-class="bg-walazy-purple text-white dark:bg-walazy-purple"
-          >
-            <component :is="item.icon" class="h-5 w-5" />
-            <span>{{ item.name }}</span>
-          </router-link>
-        </div>
-      </div>
-
-      <div class="mt-6">
-        <h3 class="px-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          Other
-        </h3>
-        <div class="mt-2 space-y-1">
-          <router-link
-            v-for="item in otherMenu"
-            :key="item.name"
-            :to="item.to"
-            class="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-walazy-purple hover:text-white dark:hover:bg-walazy-purple"
-            active-class="bg-walazy-purple text-white dark:bg-walazy-purple"
-          >
-            <component :is="item.icon" class="h-5 w-5" />
-            <span>{{ item.name }}</span>
-          </router-link>
-          <button
-            @click="handleLogout"
-            class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-walazy-purple hover:text-white dark:hover:bg-walazy-purple"
-          >
-            <ArrowLeftOnRectangleIcon class="h-5 w-5" />
-            <span>Logout</span>
-          </button>
-        </div>
-      </div>
-      <div class="flex-grow"></div>
+      <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-4 mb-2">OTHER</p>
+      <router-link
+        v-for="item in otherMenuItems"
+        :key="item.name"
+        :to="{ name: item.route }"
+        class="flex items-center px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors duration-150"
+        :class="{ 'bg-walazy-purple text-white dark:bg-walazy-purple-light dark:text-slate-900': $route.name === item.route }"
+      >
+        <component :is="item.icon" class="h-5 w-5 mr-3" />
+        <span>{{ item.label }}</span>
+      </router-link>
     </nav>
 
-    <div class="pt-6 px-3 text-xs text-gray-500 dark:text-gray-400">
-        Version 5.x <span class="text-green-500">(Current)</span>
+    <div class="p-4 border-t border-gray-200 dark:border-slate-700">
+      <div class="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400 mb-2">
+        <span class="flex items-center">
+          <svg class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16L2 12l4-4" />
+          </svg>
+          Version 5.x
+        </span>
+        <span class="px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100">Current</span>
+      </div>
+      <button
+        @click="authStore.logout()"
+        class="flex items-center w-full px-4 py-2 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-red-100 dark:hover:bg-red-700 transition-colors duration-150"
+      >
+        <svg class="h-5 w-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+        <span>Log out</span>
+      </button>
     </div>
   </aside>
 </template>
 
 <script setup>
-import { computed, onMounted, watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
-import { useAuthStore } from '@/stores/authStore'; //
-import { useSessionStore } from '@/stores/sessionStore'; //
+import { ref, watch, onMounted, computed } from 'vue';
+import { useSessionStore } from '@/stores/sessionStore';
+import { useAuthStore } from '@/stores/authStore';
+import { useRoute } from 'vue-router';
+import { isSocketConnected } from '@/services/socket'; // NEW: Import reactive socket status
+
+// Heroicons imports
 import {
-  SquaresPlusIcon,
-  ChatBubbleLeftRightIcon,
-  UserGroupIcon,
+  HomeIcon,
+  PhoneIcon,
+  MegaphoneIcon,
   PaperAirplaneIcon,
-  ChatBubbleLeftEllipsisIcon,
   CommandLineIcon,
-  CheckBadgeIcon,
-  ClockIcon,
-  FolderIcon,
-  UserCircleIcon,
-  ArrowLeftOnRectangleIcon
-} from '@heroicons/vue/24/outline';
+  MagnifyingGlassCircleIcon,
+  DocumentTextIcon,
+  BookOpenIcon,
+  GlobeAltIcon,
+  ServerStackIcon,
+  UserGroupIcon,
+} from '@heroicons/vue/24/outline'; 
 
-const router = useRouter();
+const sessionStore = useSessionStore();
+const authStore = useAuthStore();
 const route = useRoute();
-const authStore = useAuthStore(); //
-const sessionStore = useSessionStore(); //
 
-// Use a computed property to bind to v-model for the select
-// This allows two-way binding with the store's currentSelectedSessionId
-const selectedSessionId = computed({
-  get: () => sessionStore.currentSelectedSessionId,
-  set: (value) => {
-    // This setter might not be strictly necessary if @change always calls selectSession
-    // but it's good for explicit two-way binding patterns.
-    if (value) {
-      sessionStore.selectSession(value);
-    }
-  }
+const selectedSessionId = ref(null);
+const isMobile = ref(false); 
+
+const props = defineProps({
+  isOpen: {
+    type: Boolean,
+    required: true,
+  },
 });
 
-const onSessionSelect = (event) => {
-  const newSessionId = event.target.value;
-  if (newSessionId && newSessionId !== "null") { // Ensure it's a valid selection
-    sessionStore.selectSession(newSessionId);
-    // Optionally navigate to a specific device view or refresh current view
-    // For now, selecting the session in the store is the main action.
-    // If the DashboardHomePanel is watching currentSelectedSessionId, it might update.
-  } else if (newSessionId === "null" || !newSessionId) { // Handle "-- Select Device --"
-    sessionStore.selectSession(null);
-  }
+const emit = defineEmits(['toggle-sidebar']);
+
+// CHANGED: isConnected now directly uses the reactive isSocketConnected ref
+const isConnected = computed(() => isSocketConnected.value); 
+
+const onlineSessionsCount = computed(() => {
+  return sessionStore.sessionList.filter(session => session.isReady).length;
+});
+
+watch(() => sessionStore.currentSelectedSessionId, (newId) => {
+  selectedSessionId.value = newId;
+});
+
+watch(
+  () => route.name,
+  (newRouteName) => {
+    // router-link handles active state
+  },
+  { immediate: true }
+);
+
+const mainMenuItems = [
+  { label: 'Dashboard', route: 'dashboardHome', icon: HomeIcon },
+  { label: 'Auto Responders', route: 'autoResponders', icon: ServerStackIcon },
+  { label: 'Phone Book', route: 'phoneBook', icon: BookOpenIcon },
+  { label: 'Campaigns', route: 'campaigns', icon: MegaphoneIcon },
+  { label: 'Single Sender', route: 'singleSender', icon: PaperAirplaneIcon },
+  { label: 'Rest API', route: 'restApi', icon: CommandLineIcon },
+  { label: 'Bulk Check Numbers', route: 'bulkCheckNumbers', icon: MagnifyingGlassCircleIcon },
+  { label: 'History Message', route: 'historyMessage', icon: DocumentTextIcon },
+  { label: 'Plugins & Integration', route: 'pluginsIntegration', icon: UserGroupIcon }, 
+  { label: 'Message Template', route: 'messageTemplate', icon: DocumentTextIcon }, 
+  { label: 'Webhook Workflow', route: 'webhookWorkflow', icon: ServerStackIcon }, 
+];
+
+const otherMenuItems = [
+  { label: 'File Manager', route: 'fileManager', icon: GlobeAltIcon }, 
+  { label: 'Admin Menu', route: 'adminMenu', icon: UserGroupIcon }, 
+];
+
+const selectSession = () => {
+  sessionStore.selectSession(selectedSessionId.value);
 };
 
 onMounted(() => {
-  if (authStore.isAuthenticated) { //
-    sessionStore.fetchSessions(); //
-  }
+  selectedSessionId.value = sessionStore.currentSelectedSessionId;
+  isMobile.value = window.innerWidth < 768; 
+  window.addEventListener('resize', () => {
+    isMobile.value = window.innerWidth < 768;
+  });
 });
-
-// Watch for changes in currentSelectedSessionId from the store
-// and update the select element's value if it's managed externally.
-// This is mostly handled by v-model on selectedSessionId computed property.
-// watch(() => sessionStore.currentSelectedSessionId, (newId) => {
-//   const selectElement = document.getElementById('device-selector');
-//   if (selectElement) {
-//     selectElement.value = newId === null ? "null" : newId;
-//   }
-// });
-
-
-const mainMenu = [
-  { name: 'Auto Responders', to: '/auto-responders', icon: ChatBubbleLeftRightIcon },
-  { name: 'Phone Book', to: '/phone-book', icon: UserGroupIcon },
-  { name: 'Campaigns', to: '/campaigns', icon: PaperAirplaneIcon },
-  { name: 'Single Sender', to: '/single-sender', icon: ChatBubbleLeftEllipsisIcon },
-  { name: 'Rest API', to: '/rest-api', icon: CommandLineIcon },
-  { name: 'Bulk Check Numbers', to: '/bulk-check', icon: CheckBadgeIcon },
-  { name: 'History Message', to: '/history-message', icon: ClockIcon },
-];
-
-const otherMenu = [
-  { name: 'File Manager', to: '/file-manager', icon: FolderIcon },
-  { name: 'Admin Menu', to: '/admin-menu', icon: UserCircleIcon },
-];
-
-const handleLogout = () => {
-  authStore.logout(); //
-};
 </script>
 
 <style scoped>
-.router-link-exact-active {
-  @apply bg-walazy-purple text-white dark:bg-walazy-purple;
+img {
+  max-height: 2rem; 
 }
-/* Additional styling for the select if needed */
-select:disabled {
-  opacity: 0.7;
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
 }
-select option[disabled] {
-  color: #9ca3af; /* Tailwind gray-400 */
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent; 
 }
-html.dark select option[disabled] {
-  color: #6b7280; /* Tailwind slate-500 */
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-400 dark:bg-slate-500 rounded-lg;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-500 dark:bg-slate-400;
 }
 </style>

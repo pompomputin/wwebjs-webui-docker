@@ -11,7 +11,7 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-const app = express(); // Corrected: Initialize Express app for CommonJS require
+const app = express();
 
 // CORS Configuration
 const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:3000';
@@ -92,18 +92,16 @@ function cleanupSession(sessionId) {
     io.emit('status_update', { 
         sessionId, 
         message: 'Session removed.',
-        qrCleared: true  // Add this flag for frontend to know it should clear any cached QR
+        qrCleared: true
     });
 }
 
 function createWhatsappSession(sessionId) {
-    // Check if the session is already being initialized
     if (initializing[sessionId]) {
         console.log(`[${sessionId}] Session initialization already in progress, skipping duplicate request`);
         return null;
     }
     
-    // Check if session already exists and is valid
     if (sessions[sessionId]) {
         console.log(`[${sessionId}] Session already exists, not initializing again`);
         return sessions[sessionId];
@@ -120,10 +118,19 @@ function createWhatsappSession(sessionId) {
         },
     });
 
+    // Initialize session settings when client is created
+    sessions[sessionId] = { 
+        client,
+        settings: { 
+            isTypingIndicatorEnabled: false,
+            autoSendSeenEnabled: false,
+            maintainOnlinePresenceEnabled: false,
+        }
+    };
+
     client.on('qr', (qr) => {
         console.log(`[${sessionId}] QR RECEIVED`);
         qrCodes[sessionId] = qr;
-        console.log(`[${sessionId}] Stored QR: ${qr ? qr.substring(0, 30) + '...' : 'NULL'}`);
         clientReadyStatus[sessionId] = false;
         io.to(sessionId).emit('qr_code', { sessionId, qr });
         io.emit('status_update', { sessionId, message: 'QR code received. Scan.', qr });
@@ -144,7 +151,7 @@ function createWhatsappSession(sessionId) {
         io.emit('status_update', { sessionId, message: `Authentication failure: ${msg}` });
         
         if (sessions[sessionId]) {
-            sessions[sessionId].destroy().catch(e => console.error(`Error destroying client after auth_failure: ${e.message}`));
+            sessions[sessionId].client.destroy().catch(e => console.error(`Error destroying client after auth_failure: ${e.message}`));
             cleanupSession(sessionId);
         }
     });
@@ -155,7 +162,7 @@ function createWhatsappSession(sessionId) {
         qrCodes[sessionId] = null;
         io.to(sessionId).emit('ready', { sessionId });
         io.emit('status_update', { sessionId, message: 'Client is READY!' });
-        delete initializing[sessionId]; // Client is ready, no longer initializing
+        delete initializing[sessionId];
     });
     
     client.on('message', async msg => {
@@ -174,17 +181,12 @@ function createWhatsappSession(sessionId) {
         io.emit('status_update', { sessionId, message: `Initialization Error: ${err.message}` });
         cleanupSession(sessionId);
     }).finally(() => {
-        // Ensure initialization flag is cleared even if there's an error
-        if (!sessions[sessionId]) {
+        if (!sessions[sessionId] || !sessions[sessionId].client) {
             delete initializing[sessionId];
         }
     });
     
-    sessions[sessionId] = client; 
-    clientReadyStatus[sessionId] = false; 
-    qrCodes[sessionId] = null;
-    
-    return client;
+    return sessions[sessionId].client;
 }
 
 // --- Number Normalization Function ---
@@ -194,43 +196,32 @@ function normalizeToJid(rawNumber, userSelectedCountryCode) {
     }
 
     if (rawNumber.includes('@')) {
-        return rawNumber; // Already a JID (e.g., for groups)
+        return rawNumber;
     }
 
-    // Handle numbers that already start with '+' (international format)
     if (rawNumber.startsWith('+')) {
         return `${rawNumber.substring(1).replace(/\D/g, '')}@c.us`;
     }
 
-    let cleanedNumber = rawNumber.replace(/\D/g, ''); // Remove non-digits for further processing
+    let cleanedNumber = rawNumber.replace(/\D/g, '');
 
     if (userSelectedCountryCode && String(userSelectedCountryCode).trim() !== "") {
-        const cc = String(userSelectedCountryCode).replace(/\D/g, ''); // Ensure country code is digits
-
-        // Case 1: Number starts with '0' (common national trunk code)
+        const cc = String(userSelectedCountryCode).replace(/\D/g, '');
         if (cleanedNumber.startsWith('0')) {
-            // Remove leading '0' and prepend the selected country code
             return `${cc}${cleanedNumber.substring(1)}@c.us`;
         }
-        // Case 2: Number already starts with the selected country code
         else if (cleanedNumber.startsWith(cc)) {
             return `${cleanedNumber}@c.us`;
         }
-        // Case 3: Assume it's a local number for the selected country, needs cc prepended
-        // (e.g., number is "821..." and selectedCountryCode is "62" -> "62821...")
         else {
             return `${cc}${cleanedNumber}@c.us`;
         }
     } else {
-        // No country code selected by user, or it's an empty string.
-        // Fallback: assume number might be E.164 without '+' (e.g., "62812...") or just needs cleaning.
-        // This will NOT correctly format local numbers like "08..." or "8..." if no country code is specified by the user.
         return `${cleanedNumber}@c.us`;
     }
 }
 
-
-// --- ALL API Routes (MUST BE BEFORE app.use(express.static)) ---
+// --- ALL API Routes ---
 
 app.post('/auth/login', async (req, res) => {
     const { username, password } = req.body;
@@ -255,8 +246,8 @@ app.post('/session/init/:sessionId', authenticateToken, (req, res) => {
         });
     }
     
-    if (sessions[sessionId]) {
-        sessions[sessionId].getState()
+    if (sessions[sessionId] && sessions[sessionId].client) {
+        sessions[sessionId].client.getState()
             .then(state => {
                 res.json({ 
                     success: true, 
@@ -266,8 +257,8 @@ app.post('/session/init/:sessionId', authenticateToken, (req, res) => {
                 });
             })
             .catch(() => { 
-                if (sessions[sessionId]) {
-                    try { sessions[sessionId].destroy(); } catch(e) { /* ignore */ }
+                if (sessions[sessionId] && sessions[sessionId].client) {
+                    try { sessions[sessionId].client.destroy(); } catch(e) { /* ignore */ }
                     cleanupSession(sessionId);
                 }
                 
@@ -293,7 +284,8 @@ app.get('/sessions', authenticateToken, (req, res) => {
         sessionId: id, 
         isReady: clientReadyStatus[id] || false, 
         hasQr: !!qrCodes[id],
-        initializing: !!initializing[id]
+        initializing: !!initializing[id],
+        settings: sessions[id] ? sessions[id].settings : {}
     }));
     
     res.json({ success: true, sessions: sessionList });
@@ -301,7 +293,7 @@ app.get('/sessions', authenticateToken, (req, res) => {
 
 app.post('/session/remove/:sessionId', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
     
     if (client) {
         try {
@@ -333,7 +325,7 @@ app.post('/session/remove/:sessionId', authenticateToken, async (req, res) => {
 app.post('/session/send-message/:sessionId', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { number, message, countryCode } = req.body;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
@@ -355,7 +347,7 @@ app.post('/session/send-message/:sessionId', authenticateToken, async (req, res)
 app.post('/session/send-image/:sessionId', authenticateToken, upload.single('file'), async (req, res) => {
     const { sessionId } = req.params;
     const { number, caption, url, countryCode } = req.body;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
@@ -386,7 +378,7 @@ app.post('/session/send-image/:sessionId', authenticateToken, upload.single('fil
 app.post('/session/send-location/:sessionId', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
     const { number, latitude, longitude, description, countryCode } = req.body;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
@@ -409,7 +401,7 @@ app.post('/session/send-location/:sessionId', authenticateToken, async (req, res
 app.get('/session/contact-info/:sessionId/:contactId', authenticateToken, async (req, res) => {
     const { sessionId, contactId } = req.params;
     const { countryCode } = req.query;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
@@ -445,47 +437,83 @@ app.get('/session/contact-info/:sessionId/:contactId', authenticateToken, async 
     }
 });
 
-app.post('/session/set-status/:sessionId', authenticateToken, async (req, res) => {
+// MODIFIED: /session/:sessionId/set-presence-online now uses client.sendPresenceUpdate (if available) or client.setStatus
+app.post('/session/:sessionId/set-presence-online', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
-    const { statusMessage } = req.body;
-    const client = sessions[sessionId];
+    const { enabled } = req.body;
+    const sessionObj = sessions[sessionId];
+    const client = sessionObj ? sessionObj.client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
     }
-    if (typeof statusMessage === 'undefined' || statusMessage === null) {
-        return res.status(400).json({ success: false, error: 'Status message is required.' });
-    }
 
     try {
-        await client.setStatus(statusMessage);
-        res.json({ success: true, message: 'Status updated successfully.' });
+        if (enabled) {
+            await client.setStatus('Online');
+            sessionObj.settings.maintainOnlinePresenceEnabled = true;
+            res.json({ success: true, message: 'Profile status set to "Online".' });
+        } else {
+            sessionObj.settings.maintainOnlinePresenceEnabled = false;
+            res.json({ success: true, message: 'Online presence simulation disabled locally.' });
+        }
     } catch (error) {
-        console.error(`Error setting status for session ${sessionId}:`, error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error(`Error setting presence online for session ${sessionId}:`, error);
+        res.status(500).json({ success: false, error: error.message || 'Error setting profile status.' });
     }
 });
 
+// NEW API: Set typing indicator setting
+app.post('/session/:sessionId/settings/typing', authenticateToken, async (req, res) => {
+    const { sessionId } = req.params;
+    const { enabled } = req.body;
+    const sessionObj = sessions[sessionId];
+
+    if (!sessionObj) {
+        return res.status(400).json({ success: false, error: 'Session not found.' });
+    }
+
+    sessionObj.settings.isTypingIndicatorEnabled = enabled;
+    res.json({ success: true, message: `Typing indicator setting updated to ${enabled}.` });
+});
+
+// NEW API: Set auto send seen setting
+app.post('/session/:sessionId/settings/autoseen', authenticateToken, async (req, res) => {
+    const { sessionId } = req.params;
+    const { enabled } = req.body;
+    const sessionObj = sessions[sessionId];
+
+    if (!sessionObj) {
+        return res.status(400).json({ success: false, error: 'Session not found.' });
+    }
+
+    sessionObj.settings.autoSendSeenEnabled = enabled;
+    res.json({ success: true, message: `Auto send seen setting updated to ${enabled}.` });
+});
+
+
+// CORRECTED: /session/:sessionId/chat/:chatId/send-typing now calls client.sendChatstate('typing')
 app.post('/session/:sessionId/chat/:chatId/send-typing', authenticateToken, async (req, res) => {
     const { sessionId, chatId } = req.params;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
     }
 
     try {
-        await client.sendSeen(chatId);
-        res.json({ success: true, message: 'Typing state sent (simulated as seen).' });
+        // Corrected: Use sendChatstate('typing')
+        await client.sendChatstate('typing', chatId);
+        res.json({ success: true, message: 'Typing state sent.' });
     } catch (error) {
         console.error(`Error sending typing state for session ${sessionId}, chat ${chatId}:`, error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: error.message || 'Error sending typing state.' });
     }
 });
 
 app.post('/session/:sessionId/chat/:chatId/send-seen', authenticateToken, async (req, res) => {
     const { sessionId, chatId } = req.params;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
@@ -496,13 +524,13 @@ app.post('/session/:sessionId/chat/:chatId/send-seen', authenticateToken, async 
         res.json({ success: true, message: 'Seen receipt sent.' });
     } catch (error) {
         console.error(`Error sending seen receipt for session ${sessionId}, chat ${chatId}:`, error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(500).json({ success: false, error: error.message || 'Error sending seen receipt.' });
     }
 });
 
 app.post('/session/:sessionId/set-presence-online', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
@@ -517,9 +545,10 @@ app.post('/session/:sessionId/set-presence-online', authenticateToken, async (re
     }
 });
 
+
 app.get('/session/chats/:sessionId', authenticateToken, async (req, res) => {
     const { sessionId } = req.params;
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
@@ -553,12 +582,10 @@ app.get('/session/chats/:sessionId', authenticateToken, async (req, res) => {
     }
 });
 
-// New route for checking if a number is registered
 app.get('/session/is-registered/:sessionId/:numberToCheck', authenticateToken, async (req, res) => {
     const { sessionId, numberToCheck } = req.params;
     const { countryCode } = req.query;
-
-    const client = sessions[sessionId];
+    const client = sessions[sessionId] ? sessions[sessionId].client : null;
 
     if (!client || !clientReadyStatus[sessionId]) {
         return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
@@ -607,7 +634,8 @@ io.on('connection', (socket) => {
             else if (sessions[sessionId]) {
                 socket.emit('status_update', { 
                     sessionId, 
-                    message: initializing[sessionId] ? 'Session initializing...' : 'Session exists.'
+                    message: initializing[sessionId] ? 'Session initializing...' : 'Session exists.',
+                    settings: sessions[sessionId].settings
                 });
             } 
             else {
@@ -632,18 +660,17 @@ io.on('connection', (socket) => {
             return;
         }
         
-        if (sessions[sessionId]) {
-            sessions[sessionId].getState()
+        if (sessions[sessionId] && sessions[sessionId].client) {
+            sessions[sessionId].client.getState()
                 .then(st => {
-                    console.log(`[${sessionId}] Session exists with state: ${st}`);
                     socket.emit('status_update', { 
                         sessionId, 
                         message: `Session exists. State: ${st}`, 
-                        status: st
+                        status: st,
+                        settings: sessions[sessionId].settings
                     });
                     
                     if (qrCodes[sessionId]) {
-                        console.log(`[${sessionId}] Sending existing QR code`);
                         socket.emit('qr_code', { 
                             sessionId, 
                             qr: qrCodes[sessionId] 
@@ -651,10 +678,8 @@ io.on('connection', (socket) => {
                     }
                 })
                 .catch(() => { 
-                    console.log(`[${sessionId}] Session exists but getState failed, recreating`);
-                    
-                    if (sessions[sessionId]) {
-                        try { sessions[sessionId].destroy(); } catch(e) { /* ignore */ }
+                    if (sessions[sessionId] && sessions[sessionId].client) {
+                        try { sessions[sessionId].client.destroy(); } catch(e) { /* ignore */ }
                         cleanupSession(sessionId);
                     }
                     

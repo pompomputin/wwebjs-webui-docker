@@ -87,9 +87,8 @@ export const removeSessionApi = (sessionId) => {
 };
 
 // --- Updated function to check WhatsApp Number ---
-export const checkWhatsAppNumberApi = (sessionId, numberToCheck, countryCode) => { // Added countryCode parameter
+export const checkWhatsAppNumberApi = (sessionId, numberToCheck, countryCode) => { 
     let endpoint = `/session/is-registered/${sessionId}/${encodeURIComponent(numberToCheck)}`;
-    // Only add countryCode query parameter if it's selected and not an empty string
     if (countryCode && String(countryCode).trim() !== "") {
         endpoint += `?countryCode=${encodeURIComponent(countryCode)}`;
     }
@@ -97,21 +96,15 @@ export const checkWhatsAppNumberApi = (sessionId, numberToCheck, countryCode) =>
 };
 
 // --- Feature-Specific API Calls ---
-// Note: If you want to apply country code normalization to sending messages,
-// you'll need to modify sendMessageApi and other relevant functions similarly,
-// likely by adding countryCode to their parameters and sending it in the request body.
 
-export const sendMessageApi = (sessionId, recipient, message, countryCode) => { // Added countryCode
+export const sendMessageApi = (sessionId, recipient, message, countryCode) => { 
     return request(`/session/send-message/${sessionId}`, {
         method: 'POST',
-        body: JSON.stringify({ number: recipient, message: message, countryCode: countryCode }), // Send countryCode in body
+        body: JSON.stringify({ number: recipient, message: message, countryCode: countryCode }),
     });
 };
 
 export const sendImageApi = (sessionId, formData) => {
-    // If sending images also needs number normalization with country code for the 'number' field in FormData,
-    // you'll need to append countryCode to formData before calling this.
-    // Example: formData.append('countryCode', selectedCountryCode);
     return request(`/session/send-image/${sessionId}`, {
         method: 'POST',
         body: formData
@@ -122,7 +115,7 @@ export const getChatsApi = (sessionId) => {
     return request(`/session/chats/${sessionId}`);
 };
 
-export const getContactInfoApi = (sessionId, contactId, countryCode) => { // Added countryCode
+export const getContactInfoApi = (sessionId, contactId, countryCode) => { 
     let endpoint = `/session/contact-info/${sessionId}/${encodeURIComponent(contactId)}`;
      if (countryCode && String(countryCode).trim() !== "") {
         endpoint += `?countryCode=${encodeURIComponent(countryCode)}`;
@@ -130,7 +123,7 @@ export const getContactInfoApi = (sessionId, contactId, countryCode) => { // Add
     return request(endpoint);
 };
 
-export const sendLocationApi = (sessionId, recipient, latitude, longitude, description, countryCode) => { // Added countryCode
+export const sendLocationApi = (sessionId, recipient, latitude, longitude, description, countryCode) => { 
     return request(`/session/send-location/${sessionId}`, {
         method: 'POST',
         body: JSON.stringify({
@@ -138,7 +131,7 @@ export const sendLocationApi = (sessionId, recipient, latitude, longitude, descr
             latitude: parseFloat(latitude),
             longitude: parseFloat(longitude),
             description: description,
-            countryCode: countryCode // Send countryCode in body
+            countryCode: countryCode 
         }),
     });
 };
@@ -147,6 +140,30 @@ export const setStatusApi = (sessionId, statusMessage) => {
     return request(`/session/set-status/${sessionId}`, {
         method: 'POST',
         body: JSON.stringify({ statusMessage }),
+    });
+};
+
+// MODIFIED: setOnlinePresenceSettingApi (renamed from setPresenceOnlineApi to reflect its purpose of setting a setting)
+export const setOnlinePresenceSettingApi = (sessionId, enabled) => {
+    return request(`/session/${sessionId}/set-presence-online`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled }), // Pass the state of the toggle
+    });
+};
+
+// NEW API CALLS: For Typing Indicator Setting
+export const setTypingIndicatorSettingApi = (sessionId, enabled) => {
+    return request(`/session/${sessionId}/settings/typing`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled }),
+    });
+};
+
+// NEW API CALLS: For Auto Send Seen Setting
+export const setAutoSendSeenSettingApi = (sessionId, enabled) => {
+    return request(`/session/${sessionId}/settings/autoseen`, {
+        method: 'POST',
+        body: JSON.stringify({ enabled }),
     });
 };
 

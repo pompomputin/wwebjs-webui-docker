@@ -1,417 +1,337 @@
-<!-- vue-frontend/vue-whatsapp-frontend/src/components/features/DashboardHomePanel.vue -->
 <template>
-  <div class="space-y-6">
-    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6">
-      <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-3">Devices</h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <p class="text-3xl font-bold text-walazy-purple">{{ sessionStore.sessionList.length }}</p>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Total Active Sessions</p>
-        </div>
-        <div>
-          <p class="text-3xl font-bold text-walazy-purple">{{ onlineSessionsCount }}</p>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Online Sessions</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="bg-white dark:bg-slate-800 shadow-lg rounded-xl p-6">
-      <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-        <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-200">WhatsApp Devices</h2>
-        <button
-          @click="openAddNewDeviceModal"
-          class="btn-purple-theme flex items-center justify-center !w-auto px-5 py-2.5"
-        >
-          <PlusIcon class="h-5 w-5 mr-2" />
-          Add New
+  <div class="space-y-6 p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-lg shadow-md p-6">
+      <div class="flex flex-col md:flex-row items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3 md:mb-0">WhatsApp Devices</h3>
+        <button @click="openAddSessionModal" class="btn btn-indigo flex items-center space-x-2 !w-auto px-4 py-2">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          <span>Add New</span>
         </button>
       </div>
 
-      <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
-        <div class="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
-          <span>Show</span>
-          <select v-model="itemsPerPage" class="form-input !py-1.5 !px-2 !w-auto !text-sm bg-slate-50 dark:bg-slate-700 border-gray-300 dark:border-slate-600 rounded-lg focus:ring-walazy-purple focus:border-walazy-purple">
+      <div class="flex flex-col sm:flex-row items-center justify-between mb-4 space-y-3 sm:space-y-0 sm:space-x-4">
+        <div class="flex items-center space-x-2">
+          <label for="show-entries" class="text-sm text-gray-600 dark:text-gray-300">Show</label>
+          <select id="show-entries" v-model="entriesPerPage" class="form-select text-sm">
             <option value="5">5</option>
             <option value="10">10</option>
             <option value="25">25</option>
+            <option value="50">50</option>
           </select>
-          <span>entries</span>
+          <span class="text-sm text-gray-600 dark:text-gray-300">entries</span>
         </div>
-        <div class="relative w-full sm:w-auto">
+        <div class="w-full sm:w-auto">
           <input
             type="text"
-            v-model="searchTerm"
+            v-model="searchQuery"
             placeholder="Search devices..."
-            class="form-input !py-2 !pr-10 w-full sm:w-64 bg-slate-50 dark:bg-slate-700 border-gray-300 dark:border-slate-600 rounded-lg focus:ring-walazy-purple focus:border-walazy-purple"
+            class="form-input w-full"
           />
-          <MagnifyingGlassIcon class="h-5 w-5 text-gray-400 dark:text-slate-500 absolute right-3 top-1/2 transform -translate-y-1/2" />
         </div>
       </div>
 
       <div class="overflow-x-auto custom-scrollbar">
         <table class="min-w-full divide-y divide-gray-200 dark:divide-slate-700">
-          <thead class="bg-gray-50 dark:bg-slate-700/50">
+          <thead class="bg-gray-50 dark:bg-slate-700">
             <tr>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Device</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">DEVICE</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">NUMBER</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">STATUS</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ACTIONS</th>
             </tr>
           </thead>
           <tbody class="bg-white dark:bg-slate-800 divide-y divide-gray-200 dark:divide-slate-700">
-            <tr v-if="sessionStore.isLoadingSessions && paginatedSessions.length === 0 && !searchTerm">
-              <td colspan="3" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500 dark:text-gray-400">
-                Loading sessions...
-              </td>
+            <tr v-if="paginatedSessions.length === 0">
+              <td colspan="4" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 text-center">No devices found.</td>
             </tr>
-            <tr v-else-if="filteredSessions.length === 0 && !sessionStore.isLoadingSessions">
-               <td colspan="3" class="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-500 dark:text-gray-400">
-                No devices found{{ searchTerm ? ' for "' + searchTerm + '"' : '' }}. Click "Add New" to create one.
-              </td>
-            </tr>
-            <tr v-for="session_item in paginatedSessions" :key="session_item.sessionId">
-              <td class="px-6 py-4 whitespace-nowrap">
-                <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ session_item.sessionId }}</div>
-                <pre class="text-xs mt-1 p-1 bg-gray-100 dark:bg-slate-700 rounded max-w-xs overflow-auto">{{ JSON.stringify({ isR: session_item.isReady, hQ: session_item.hasQr, qrP: !!session_item.qrCode, qrL: session_item.qrCode ? session_item.qrCode.length : 0, sM: session_item.statusMessage }, null, 0) }}</pre>
-              </td>
+            <tr v-for="session in paginatedSessions" :key="session.sessionId">
+              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{{ session.sessionId }}</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {{ session.sessionId }} </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span
-                  class="px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full"
-                  :class="getStatusClass(session_item)"
+                  :class="{
+                    'px-2 inline-flex text-xs leading-5 font-semibold rounded-full': true,
+                    'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100': session.isReady,
+                    'bg-orange-100 text-orange-800 dark:bg-orange-700 dark:text-orange-100': session.qrCode || session.hasQr,
+                    'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100': session.initializing && !session.qrCode && !session.isReady,
+                    'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100': !session.isReady && !session.hasQr && !session.initializing,
+                  }"
                 >
-                  {{ session_item.isReady ? 'Connected' : (session_item.qrCode && session_item.qrCode.length > 0 ? 'QR. Scan.' : (session_item.hasQr ? 'Waiting QR...' : (session_item.statusMessage || 'Initializing...'))) }}
+                  {{ session.statusMessage }}
                 </span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                <button
-                  v-if="!sessionStore.sessions[session_item.sessionId]?.isReady"
-                  @click="displayQrCode(session_item.sessionId)"
-                  title="Show QR Code"
-                  class="p-1.5 text-sky-600 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-300 rounded-md hover:bg-sky-100 dark:hover:bg-sky-700/50 transition-colors"
-                  :class="{ 'opacity-50 cursor-not-allowed': !(sessionStore.sessions[session_item.sessionId]?.hasQr || sessionStore.sessions[session_item.sessionId]?.qrCode) }"
-                  :disabled="!(sessionStore.sessions[session_item.sessionId]?.hasQr || sessionStore.sessions[session_item.sessionId]?.qrCode)"
-                >
-                  <QrCodeIcon class="h-5 w-5" />
-                </button>
-                 <button
-                    @click="reinitializeSession(session_item.sessionId)"
-                    title="Re-initialize Session"
-                    :disabled="sessionStore.isProcessingSession === session_item.sessionId"
-                    class="p-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 rounded-md hover:bg-blue-100 dark:hover:bg-blue-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <div class="flex items-center space-x-2">
+                  <button
+                    v-if="session.hasQr"
+                    @click="showQr(session.sessionId)"
+                    class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded-md border border-gray-300 dark:border-slate-600"
+                    title="Show QR Code"
                   >
-                    <ArrowPathIcon class="h-5 w-5" :class="{'animate-spin': sessionStore.isProcessingSession === session_item.sessionId}" />
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 11h8V3H3v8zm2-6h4v4H5V5zm8-2v8h8V3h-8zm6 6h-4V5h4v4zM3 13h8v8H3v-8zm2 6h4v-4H5v4zm13 0l-3-3v3h-2v-7h9v2h-4v4h2v3h-2z" />
+                    </svg>
                   </button>
-                <button
-                  @click="confirmRemoveSession(session_item.sessionId)"
-                  title="Remove Session"
-                  :disabled="sessionStore.isProcessingSession === session_item.sessionId"
-                  class="p-1.5 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 rounded-md hover:bg-red-100 dark:hover:bg-red-700/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <TrashIcon class="h-5 w-5" />
-                </button>
+                  <button
+                    v-if="session.isReady"
+                    @click="selectSession(session.sessionId)"
+                    class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded-md border border-gray-300 dark:border-slate-600"
+                    title="Select Session"
+                  >
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                  </button>
+                  <button
+                    v-if="session.isReady"
+                    @click="openSessionSettingsModal(session.sessionId)"
+                    class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded-md border border-gray-300 dark:border-slate-600"
+                    title="Session Settings"
+                  >
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.827 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.827-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </button>
+                  <button
+                    @click="removeSession(session.sessionId)"
+                    :disabled="sessionStore.isProcessingSession === session.sessionId"
+                    class="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200 p-1 rounded-md border border-gray-300 dark:border-slate-600"
+                    title="Remove Session"
+                  >
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <div v-if="totalPages > 1 && filteredSessions.length > 0" class="mt-4 flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
-        <div>
-          Showing {{ paginatedSessions.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0 }} to {{ Math.min(currentPage * itemsPerPage, filteredSessions.length) }} of {{ filteredSessions.length }} entries
+
+      <nav class="flex items-center justify-between pt-4">
+        <div class="text-sm text-gray-700 dark:text-gray-300">
+          Showing {{ currentStartIndex + 1 }} to {{ currentEndIndex }} of {{ filteredSessions.length }} entries
         </div>
-        <div class="flex space-x-1">
-          <button @click="currentPage--" :disabled="currentPage === 1" class="px-3 py-1 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50">Previous</button>
-          <button @click="currentPage++" :disabled="currentPage === totalPages || totalPages === 0" class="px-3 py-1 border border-gray-300 dark:border-slate-600 rounded-md hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-50">Next</button>
+        <ul class="flex items-center space-x-1">
+          <li>
+            <button
+              @click="prevPage"
+              :disabled="currentPage === 1"
+              class="px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-600"
+            >
+              Previous
+            </button>
+          </li>
+          <li v-for="page in totalPages" :key="page">
+            <button
+              @click="goToPage(page)"
+              :class="{
+                'px-3 py-1 rounded-md font-bold': true,
+                'bg-indigo-600 text-white dark:bg-indigo-700': currentPage === page,
+                'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-600': currentPage !== page,
+              }"
+            >
+              {{ page }}
+            </button>
+          </li>
+          <li>
+            <button
+              @click="nextPage"
+              :disabled="currentPage === totalPages"
+              class="px-3 py-1 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-100 dark:bg-slate-700 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-600"
+            >
+              Next
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+
+    <div v-if="isQrModalOpen" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex justify-center items-center z-50">
+      <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 relative w-96">
+        <button @click="closeQrModal" class="absolute top-3 right-3 text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-100">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Scan QR Code for Session: {{ sessionStore.currentSelectedSessionId }}</h3>
+        <div v-if="sessionStore.selectedSessionQrCode" class="flex justify-center p-4">
+          <qrcode-vue :value="sessionStore.selectedSessionQrCode" :size="250" level="H" class="bg-white p-2 rounded-md" />
         </div>
+        <p v-else class="text-center text-red-500 dark:text-red-400">QR code not available or expired.</p>
+        <p class="text-center text-sm text-gray-500 dark:text-gray-400 mt-2">
+          Keep this window open until your session connects.
+        </p>
       </div>
     </div>
 
-    <AddNewDeviceModal
-      :show="isAddNewDeviceModalVisible"
-      :is-loading="!!sessionStore.isProcessingSession && sessionStore.isProcessingSession === newSessionIdForModal"
-      :error-message="addDeviceError"
-      @close="closeAddNewDeviceModal"
-      @submit="handleAddNewDevice"
-    />
-    <QrCodeDisplayModal
-      :show="isQrModalVisible"
-      :qr-code="currentQrCode"
-      :session-id="currentSessionIdForQr"
-      :is-loading="isQrCodeLoading"
-      @close="closeQrModal"
-      @request-qr="requestQrCodeForSession(currentSessionIdForQr)"
-    />
+    <AddSessionModal v-if="isAddSessionModalOpen" @confirm="handleAddSessionConfirm" @cancel="handleAddSessionCancel" />
+
+    <SessionSettingsModal v-if="isSessionSettingsModalOpen" :sessionId="selectedSettingsSessionId" @close="closeSessionSettingsModal" />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useSessionStore } from '@/stores/sessionStore';
 import { useAuthStore } from '@/stores/authStore';
-import AddNewDeviceModal from '@/components/modals/AddNewDeviceModal.vue';
-import QrCodeDisplayModal from '@/components/modals/QrCodeDisplayModal.vue';
-import { PlusIcon, QrCodeIcon, TrashIcon, ArrowPathIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline';
-import { requestQrCode, getSocket } from '@/services/socket';
+import { useThemeStore } from '@/stores/themeStore';
+import QrcodeVue from 'qrcode.vue';
+import AddSessionModal from '@/components/modals/AddSessionModal.vue';
+import SessionSettingsModal from '@/components/modals/SessionSettingsModal.vue'; // Import the new settings modal
 
 const sessionStore = useSessionStore();
 const authStore = useAuthStore();
+const themeStore = useThemeStore();
 
-const isAddNewDeviceModalVisible = ref(false);
-const newSessionIdForModal = ref('');
-const isQrModalVisible = ref(false);
-const currentQrCode = ref('');
-const currentSessionIdForQr = ref('');
-const isQrCodeLoading = ref(false);
-const addDeviceError = ref('');
-
-const searchTerm = ref('');
-const itemsPerPage = ref(5);
+const searchQuery = ref('');
+const entriesPerPage = ref(5);
 const currentPage = ref(1);
+const isQrModalOpen = ref(false);
+const isAddSessionModalOpen = ref(false);
+const isSessionSettingsModalOpen = ref(false); // State to control settings modal visibility
+const selectedSettingsSessionId = ref(null); // To pass session ID to settings modal
+const currentTime = ref('');
 
-// Set up global function to allow opening QR modal from socket events
-function setupGlobalQrModalOpener() {
-  window.openQrModalForSession = (sessionId) => {
-    const sessionData = sessionStore.sessions[sessionId];
-    if (sessionData) {
-      // Only auto-show for sessions that have just received a new QR
-      if (sessionData.qrCode && sessionData.qrCode.length > 0) {
-        displayQrCode(sessionId);
-      }
-    }
-  };
-}
-
-// Auto-watch for QR code changes
-watch(() => sessionStore.sessions, (newSessions, oldSessions) => {
-  // If we have an open QR modal and the QR code for that session changes, update the current QR code
-  if (isQrModalVisible.value && currentSessionIdForQr.value) {
-    const newSession = newSessions[currentSessionIdForQr.value];
-    if (newSession && newSession.qrCode && (!oldSessions[currentSessionIdForQr.value]?.qrCode || oldSessions[currentSessionIdForQr.value]?.qrCode !== newSession.qrCode)) {
-      console.log(`QR code updated for ${currentSessionIdForQr.value} while modal is open`);
-      currentQrCode.value = newSession.qrCode;
-      isQrCodeLoading.value = false;
-    }
+const isConnected = computed(() => {
+  // Directly check the reactive status exported from socket.js
+  if (window.socketInstance) {
+    return window.socketInstance.connected;
   }
-}, { deep: true });
-
-onMounted(() => {
-  sessionStore.fetchSessions();
-  setupGlobalQrModalOpener();
-  
-  // Ensure socket listeners are initialized
-  sessionStore.initializeSocketListeners();
-});
-
-onBeforeUnmount(() => {
-  // Clean up global function when component is unmounted
-  if (window.openQrModalForSession) {
-    delete window.openQrModalForSession;
-  }
+  return false;
 });
 
 const onlineSessionsCount = computed(() => {
-  return sessionStore.sessionList.filter(s => s.isReady).length;
+  return sessionStore.sessionList.filter(session => session.isReady).length;
 });
 
 const filteredSessions = computed(() => {
-  if (!searchTerm.value) {
-    return sessionStore.sessionList;
-  }
+  const query = searchQuery.value.toLowerCase();
   return sessionStore.sessionList.filter(session =>
-    session.sessionId.toLowerCase().includes(searchTerm.value.toLowerCase())
+    session.sessionId.toLowerCase().includes(query) ||
+    session.statusMessage.toLowerCase().includes(query)
   );
 });
 
-const totalPages = computed(() => {
-  if (filteredSessions.value.length === 0) return 1;
-  return Math.ceil(filteredSessions.value.length / itemsPerPage.value);
-});
-
 const paginatedSessions = computed(() => {
-  const start = (currentPage.value - 1) * itemsPerPage.value;
-  const end = start + itemsPerPage.value;
+  const start = (currentPage.value - 1) * entriesPerPage.value;
+  const end = start + entriesPerPage.value;
   return filteredSessions.value.slice(start, end);
 });
 
-watch(searchTerm, () => { currentPage.value = 1; });
-watch(itemsPerPage, () => { currentPage.value = 1; });
-watch(filteredSessions, () => {
-    if (currentPage.value > totalPages.value && totalPages.value > 0) {
-        currentPage.value = totalPages.value;
-    } else if (totalPages.value === 0 && filteredSessions.value.length === 0) {
-        currentPage.value = 1;
-    }
-}, { deep: true });
-watch(() => sessionStore.sessions, () => {
-    if (currentPage.value > totalPages.value && totalPages.value > 0) {
-        currentPage.value = totalPages.value;
-    } else if (totalPages.value === 0 && filteredSessions.value.length === 0) {
-         currentPage.value = 1;
-    }
-}, { deep: true });
+const totalPages = computed(() => {
+  return Math.ceil(filteredSessions.value.length / entriesPerPage.value);
+});
+
+const currentStartIndex = computed(() => (currentPage.value - 1) * entriesPerPage.value);
+const currentEndIndex = computed(() => Math.min(currentPage.value * entriesPerPage.value, filteredSessions.value.length));
 
 
-const getStatusClass = (session_item) => {
-  const sessionData = sessionStore.sessions[session_item.sessionId];
-  if (sessionData?.isReady) return 'bg-green-100 text-green-800 dark:bg-green-700/30 dark:text-green-300';
-  if (sessionData?.qrCode && sessionData.qrCode.length > 0) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700/30 dark:text-yellow-300';
-  if (sessionData?.hasQr) return 'bg-orange-100 text-orange-800 dark:bg-orange-700/30 dark:text-orange-300';
-  const lowerStatusMsg = (sessionData?.statusMessage || '').toLowerCase();
-  if (lowerStatusMsg.includes('fail') || lowerStatusMsg.includes('error')) return 'bg-red-100 text-red-800 dark:bg-red-700/30 dark:text-red-300';
-  return 'bg-gray-100 text-gray-800 dark:bg-slate-700 dark:text-slate-300';
-};
-
-const openAddNewDeviceModal = () => {
-    addDeviceError.value = '';
-    newSessionIdForModal.value = '';
-    isAddNewDeviceModalVisible.value = true;
-};
-
-const closeAddNewDeviceModal = () => {
-    isAddNewDeviceModalVisible.value = false;
-    newSessionIdForModal.value = '';
-    addDeviceError.value = '';
-};
-
-const handleAddNewDevice = async (newId) => {
-  newSessionIdForModal.value = newId;
-  addDeviceError.value = '';
-  if (!newId) {
-    addDeviceError.value = 'Session name cannot be empty.';
-    if (sessionStore.isProcessingSession === newId) sessionStore.isProcessingSession = null;
-    return;
-  }
-  try {
-    await sessionStore.addNewSession(newId);
-    isAddNewDeviceModalVisible.value = false;
-    
-    // After adding a new session, request QR code and show modal if available
-    setTimeout(() => {
-      const sessionData = sessionStore.sessions[newId];
-      if (sessionData && !sessionData.isReady) {
-        displayQrCode(newId);
-      }
-    }, 500);
-  } catch (error) {
-    console.error("Error adding new session from panel:", error);
-    addDeviceError.value = error.message || 'Failed to add session. Check console for details.';
+const goToPage = (page) => {
+  if (page >= 1 && page <= totalPages.value) {
+    currentPage.value = page;
   }
 };
 
-const displayQrCode = (sessionId) => {
-  const sessionFromStore = sessionStore.sessions[sessionId];
-
-  console.log(`DashboardHomePanel: Clicked QR button for session '${sessionId}'. Session object from store:`, JSON.parse(JSON.stringify(sessionFromStore)));
-
-  if (sessionFromStore && sessionFromStore.qrCode && sessionFromStore.qrCode.length > 0) {
-    // QR code available, show it
-    currentQrCode.value = sessionFromStore.qrCode;
-    currentSessionIdForQr.value = sessionId;
-    isQrModalVisible.value = true;
-    isQrCodeLoading.value = false;
-  } else if (sessionFromStore && sessionFromStore.hasQr) {
-    // QR expected but not yet available, show modal in loading state and request QR
-    currentQrCode.value = ''; // Ensure modal shows "Waiting for QR code..."
-    currentSessionIdForQr.value = sessionId;
-    isQrModalVisible.value = true;
-    isQrCodeLoading.value = true;
-    console.log(`DashboardHomePanel: QR for ${sessionId} is expected (hasQr=true) but string is missing. Requesting QR...`);
-    requestQrCodeForSession(sessionId);
-  } else {
-    // No QR info at all, attempt to re-initialize
-    console.warn(`DashboardHomePanel: QR button clicked for ${sessionId}, but no QR info in store. Attempting re-init.`);
-    sessionStore.updateGlobalStatus(`No QR for ${sessionId}. Attempting to re-initialize...`);
-    reinitializeSession(sessionId);
-    
-    // Show the modal in loading state
-    currentQrCode.value = '';
-    currentSessionIdForQr.value = sessionId;
-    isQrModalVisible.value = true;
-    isQrCodeLoading.value = true;
+const nextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    currentPage.value++;
   }
 };
 
-const requestQrCodeForSession = (sessionId) => {
-  if (!sessionId) return;
-  
-  isQrCodeLoading.value = true; // Show loading state in modal
-  console.log(`Requesting QR code for session: ${sessionId}`);
-  
-  // Use socket to request QR code
-  if (requestQrCode(sessionId)) {
-    // Set a timeout to stop loading if no QR is received
-    setTimeout(() => {
-      if (isQrCodeLoading.value && currentSessionIdForQr.value === sessionId) {
-        const currentQrData = sessionStore.sessions[sessionId]?.qrCode;
-        if (!currentQrData) {
-          console.warn(`No QR received for ${sessionId} after timeout`);
-          // Keep modal open, but update loading state
-          isQrCodeLoading.value = false;
-        }
-      }
-    }, 5000);
-  } else {
-    console.error(`Failed to request QR code - socket not available or not connected`);
-    isQrCodeLoading.value = false;
+const prevPage = () => {
+  if (currentPage.value > 1) {
+    currentPage.value--;
   }
+};
+
+const selectSession = (sessionId) => {
+  sessionStore.selectSession(sessionId);
+  if (window.socketInstance && window.socketInstance.connected) {
+    window.socketInstance.emit('join_session_room', sessionId);
+  }
+};
+
+const removeSession = async (sessionId) => {
+  if (confirm(`Are you sure you want to remove session '${sessionId}'?`)) {
+    await sessionStore.removeSession(sessionId);
+  }
+};
+
+const openAddSessionModal = () => {
+  isAddSessionModalOpen.value = true;
+};
+
+const handleAddSessionConfirm = (newSessionId) => {
+  isAddSessionModalOpen.value = false;
+  if (newSessionId) {
+    sessionStore.addNewSession(newSessionId);
+  }
+};
+
+const handleAddSessionCancel = () => {
+  isAddSessionModalOpen.value = false;
+};
+
+const showQr = (sessionId) => {
+  sessionStore.selectSession(sessionId);
+  isQrModalOpen.value = true;
 };
 
 const closeQrModal = () => {
-  isQrModalVisible.value = false;
-  currentSessionIdForQr.value = null;
-  currentQrCode.value = '';
-  isQrCodeLoading.value = false;
+  isQrModalOpen.value = false;
 };
 
-const reinitializeSession = async (sessionId) => {
-    if (sessionStore.isProcessingSession === sessionId) {
-        console.log(`Re-initialization for ${sessionId} already in progress.`);
-        return;
-    }
-    try {
-        await sessionStore.addNewSession(sessionId);
-        
-        // After re-initializing, try to get the QR code
-        setTimeout(() => {
-            const updatedSession = sessionStore.sessions[sessionId];
-            if (updatedSession && !updatedSession.isReady) {
-                // If QR code is already available, show it
-                if (updatedSession.qrCode) {
-                    displayQrCode(sessionId);
-                } 
-                // If QR is expected but not yet available, request it
-                else if (updatedSession.hasQr) {
-                    displayQrCode(sessionId);
-                    requestQrCodeForSession(sessionId);
-                }
-            }
-        }, 500);
-    } catch (error) {
-        console.error(`Error re-initializing session ${sessionId} from panel:`, error);
-    }
+// NEW: Functions to open/close session settings modal
+const openSessionSettingsModal = (sessionId) => {
+  selectedSettingsSessionId.value = sessionId;
+  isSessionSettingsModalOpen.value = true;
 };
 
-const confirmRemoveSession = (sessionId) => {
-  if (confirm(`Are you sure you want to remove session '${sessionId}'?`)) {
-    sessionStore.removeSession(sessionId);
+const closeSessionSettingsModal = () => {
+  isSessionSettingsModalOpen.value = false;
+  selectedSettingsSessionId.value = null;
+};
+
+
+onMounted(() => {
+  sessionStore.fetchSessions();
+
+  window.openQrModalForSession = (sessionId) => {
+    sessionStore.selectSession(sessionId);
+    isQrModalOpen.value = true;
+  };
+
+  updateTime();
+  setInterval(updateTime, 1000);
+});
+
+onUnmounted(() => {
+  if (window.openQrModalForSession) {
+    window.openQrModalForSession = null;
   }
+});
+
+const updateTime = () => {
+  const now = new Date();
+  currentTime.value = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 };
+
+watch(() => sessionStore.currentSelectedSessionId, (newSessionId) => {
+  if (newSessionId) {
+    // Logic for chat panel if it's dynamic
+  }
+});
 </script>
 
 <style scoped>
-.btn-purple-theme {
-    @apply bg-walazy-purple hover:bg-opacity-90 text-white font-semibold py-2.5 px-4 rounded-lg shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-slate-800 focus:ring-walazy-purple transition-all ease-in-out duration-150 transform active:scale-95;
+/* Add any specific styles for this panel if needed */
+.feature-panel {
+  /* No specific styles currently, Tailwind is handling most of it */
 }
-.form-input {
-    @apply mt-1 block w-full px-3.5 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg shadow-sm
-           bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200
-           focus:outline-none focus:ring-1 focus:ring-walazy-purple dark:focus:ring-walazy-purple focus:border-walazy-purple dark:focus:border-walazy-purple
-           sm:text-sm caret-walazy-purple transition-colors duration-150;
-}
-.form-input::placeholder { @apply text-slate-400 dark:text-slate-500; }
-.form-select {
-     @apply mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-slate-600 focus:outline-none focus:ring-walazy-purple focus:border-walazy-purple sm:text-sm rounded-md bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200;
-}
-.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-.custom-scrollbar::-webkit-scrollbar-track { @apply bg-slate-100 dark:bg-slate-700 rounded-lg; }
-.custom-scrollbar::-webkit-scrollbar-thumb { @apply bg-slate-400 dark:bg-slate-500 rounded-lg; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { @apply bg-slate-500 dark:bg-slate-400; }
 </style>

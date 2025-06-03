@@ -3,13 +3,16 @@ import { io } from 'socket.io-client';
 import { useSessionStore } from '../stores/sessionStore';
 import { useChatStore } from '../stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
+import { ref } from 'vue'; // Import ref for reactivity
 
 const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
 let socket = null;
+const socketConnected = ref(false); // Reactive ref for connection status
 
 export function initializeSocket() {
     if (socket && socket.connected) {
+        socketConnected.value = true; // Ensure status is updated if already connected
         return socket;
     }
 
@@ -22,6 +25,7 @@ export function initializeSocket() {
              socket.disconnect();
              socket = null;
         }
+        socketConnected.value = false; // Ensure status is false if no token
         return null;
     }
 
@@ -42,7 +46,8 @@ export function initializeSocket() {
     const chatStore = useChatStore();
 
     socket.on('connect', () => {
-        console.log('Socket.IO connected with auth:', socket.id, 'to', socket.io.uri, 'at', new Date().toLocaleTimeString()); // Add timestamp
+        console.log('Socket.IO connected with auth:', socket.id, 'to', socket.io.uri, 'at', new Date().toLocaleTimeString());
+        socketConnected.value = true; // Update reactive status
         sessionStore.updateGlobalStatus('Socket connected.');
         if (sessionStore.currentSelectedSessionId) {
             socket.emit('join_session_room', sessionStore.currentSelectedSessionId);
@@ -51,26 +56,24 @@ export function initializeSocket() {
 
     socket.on('disconnect', (reason) => {
         console.log('Socket.IO disconnected:', reason);
+        socketConnected.value = false; // Update reactive status
         sessionStore.updateGlobalStatus(`Socket disconnected: ${reason}`);
     });
 
     socket.on('connect_error', (error) => {
         console.error('Socket.IO conn error:', error.message, 'URI:', socket.io.uri);
+        socketConnected.value = false; // Update reactive status
         sessionStore.updateGlobalStatus(`Socket conn error: ${error.message}`);
         if (error.message.includes('Authentication error') || (error.message && error.message.includes('websocket error'))) {
              console.error('Authentication or WebSocket error detected. Token might be invalid or network issue.');
         }
     });
 
-    // Handle QR code events
     socket.on('qr_code', (data) => {
         console.log('Socket RX [qr_code] event for session:', data.sessionId, 'QR data:', data.qr ? data.qr.substring(0, 30) + '...' : 'NULL');
-        
         try {
             const sessionStore = useSessionStore();
             sessionStore.handleQrCodeEvent(data);
-            
-            // Auto-open QR modal for active session if modal component exists
             if (data.qr && data.sessionId && window.openQrModalForSession) {
                 window.openQrModalForSession(data.sessionId);
             }
@@ -79,47 +82,55 @@ export function initializeSocket() {
         }
     });
     
-    socket.on('authenticated', (data) => { 
-        sessionStore.setSessionAuthenticated(data.sessionId); 
+    socket.on('session_ready', (payload) => {
+        const { sessionId } = payload;
+        console.log(`SessionStore: Socket 'session_ready' event received for ${sessionId}`);
+        sessionStore.setSessionReady(sessionId);
     });
-    
-    socket.on('ready', (data) => { 
-        sessionStore.setSessionReady(data.sessionId); 
+
+    socket.on('session_authenticated', (payload) => {
+        const { sessionId } = payload;
+        console.log(`SessionStore: Socket 'session_authenticated' event received for ${sessionId}`);
+        sessionStore.setSessionAuthenticated(sessionId);
     });
-    
-    socket.on('auth_failure', (data) => { 
-        sessionStore.setSessionAuthFailure(data.sessionId, data.message); 
+
+    socket.on('session_disconnected', (payload) => {
+        const { sessionId, reason } = payload;
+        console.log(`SessionStore: Socket 'session_disconnected' event received for ${sessionId}. Reason: ${reason}`);
+        sessionStore.setSessionDisconnected(sessionId, reason);
     });
-    
-    socket.on('init_error', (data) => { 
-        sessionStore.setSessionInitError(data.sessionId, data.error);
+
+    socket.on('session_auth_failure', (payload) => {
+        const { sessionId, message } = payload;
+        console.log(`SessionStore: Socket 'session_auth_failure' event received for ${sessionId}. Message: ${message}`);
+        sessionStore.setSessionAuthFailure(sessionId, message);
     });
-    
-    socket.on('session_removed', (data) => {
-        sessionStore.handleSessionRemoved(data.sessionId);
-        chatStore.clearChatDataForSession(data.sessionId);
+
+    socket.on('session_removed', (payload) => {
+        const { sessionId } = payload;
+        console.log(`SessionStore: Socket 'session_removed' event received for ${sessionId}`);
+        sessionStore.handleSessionRemoved(sessionId);
+        chatStore.clearChatDataForSession(sessionId);
     });
-    
-    socket.on('disconnected_session', (data) => {
-        if(data && data.sessionId) sessionStore.setSessionDisconnected(data.sessionId, data.reason); 
+
+    socket.on('session_init_error', (payload) => {
+        const { sessionId, error } = payload;
+        console.log(`SessionStore: Socket 'session_init_error' event received for ${sessionId}. Error: ${error}`);
+        sessionStore.setSessionInitError(sessionId, error);
     });
     
     socket.on('status_update', (data) => {
         if (data.sessionId && data.message) {
-            const session = sessionStore.sessions[data.sessionId];
-            if (session) session.statusMessage = data.message;
-            else if(data.message.toLowerCase().includes("initialization started") || data.message.toLowerCase().includes("qr code received")) sessionStore.fetchSessions();
+            if (sessionStore.sessions[data.sessionId]) {
+                sessionStore.sessions[data.sessionId].statusMessage = data.message;
+            }
+            else if(data.message.toLowerCase().includes("initialization started") || 
+                    data.message.toLowerCase().includes("qr code received")) {
+                sessionStore.fetchSessions();
+            }
             
-            // If status update includes QR data, update it
             if(data.sessionId && data.qr !== undefined) {
-                if(data.qr) {
-                    sessionStore.updateSessionQr(data.sessionId, data.qr);
-                    
-                    // Auto-open QR modal for active session if modal component exists
-                    if (window.openQrModalForSession) {
-                        window.openQrModalForSession(data.sessionId);
-                    }
-                }
+                if(data.qr) sessionStore.updateSessionQr(data.sessionId, data.qr);
             }
         }
         if (!data.sessionId && data.message) sessionStore.updateGlobalStatus(data.message);
@@ -177,19 +188,11 @@ export function connectSocket() {
     }
 }
 
-export function disconnectSocket() {
+export function disconnectSocket() { // This function is EXPORTED
     if (socket && socket.connected) {
         socket.disconnect();
         console.log('Socket.IO disconnected by disconnectSocket()');
     }
 }
 
-// Expose function to request QR codes via socket
-export function requestQrCode(sessionId) {
-    if (socket && socket.connected && sessionId) {
-        socket.emit('request_init_session', sessionId);
-        console.log(`Requested QR code for session: ${sessionId}`);
-        return true;
-    }
-    return false;
-}
+export const isSocketConnected = socketConnected; // Export the reactive ref
