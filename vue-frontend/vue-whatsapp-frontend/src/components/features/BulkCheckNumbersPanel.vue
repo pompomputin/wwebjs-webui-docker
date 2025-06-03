@@ -58,17 +58,49 @@
           Stop Check
         </button>
       </div>
-        <div class="mt-2">
-          <p v-if="!sessionStore.selectedSessionData?.isReady && sessionStore.currentSelectedSessionId" class="text-sm text-orange-500 dark:text-orange-400">
-            Selected session ({{ sessionStore.currentSelectedSessionId }}) is not ready.
-          </p>
-          <p v-else-if="!sessionStore.currentSelectedSessionId" class="text-sm text-orange-500 dark:text-orange-400">
-            No session selected. Please select or initialize a session first.
+      <div class="mt-2">
+        <p v-if="!sessionStore.selectedSessionData?.isReady && sessionStore.currentSelectedSessionId" class="text-sm text-orange-500 dark:text-orange-400">
+          Selected session ({{ sessionStore.currentSelectedSessionId }}) is not ready.
+        </p>
+        <p v-else-if="!sessionStore.currentSelectedSessionId" class="text-sm text-orange-500 dark:text-orange-400">
+          No session selected. Please select or initialize a session first.
+        </p>
+      </div>
+    </div>
+    <p v-if="overallStatus" class="mt-4 text-sm text-slate-600 dark:text-slate-300">{{ overallStatus }}</p>
+
+    <div class="mt-6 flex flex-col md:flex-row gap-6">
+      <div class="bg-white dark:bg-slate-800 shadow-md rounded-lg p-6 flex-1">
+        <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          Registered Numbers ({{ bulkCheckStore.registeredNumbers.length }})
+        </h3>
+        <div class="max-h-60 overflow-y-auto custom-scrollbar border border-gray-200 dark:border-slate-700 rounded-md p-3">
+          <ul v-if="bulkCheckStore.registeredNumbers.length > 0" class="list-disc pl-5 space-y-1 text-sm text-gray-800 dark:text-gray-200">
+            <li v-for="number in bulkCheckStore.registeredNumbers" :key="number">{{ number }}</li>
+          </ul>
+          <p v-else class="text-center py-2 text-gray-500 dark:text-gray-400">
+            No registered numbers from the last bulk check.
           </p>
         </div>
+      </div>
+
+      <div class="bg-white dark:bg-slate-800 shadow-md rounded-lg p-6 flex-1">
+        <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-3">
+          Unregistered / Error ({{ bulkCheckStore.unregisteredNumbers.length }})
+        </h3>
+        <div class="max-h-60 overflow-y-auto custom-scrollbar border border-gray-200 dark:border-slate-700 rounded-md p-3">
+          <ul v-if="bulkCheckStore.unregisteredNumbers.length > 0" class="list-disc pl-5 space-y-1 text-sm text-gray-800 dark:text-gray-200">
+            <li v-for="item in bulkCheckStore.unregisteredNumbers" :key="item.number">
+              {{ item.number }} (Reason: {{ item.reason || 'Unknown error' }})
+            </li>
+          </ul>
+          <p v-else class="text-center py-2 text-gray-500 dark:text-gray-400">
+            No unregistered numbers or errors from the last bulk check.
+          </p>
+        </div>
+      </div>
     </div>
-      <p v-if="overallStatus" class="mt-4 text-sm text-slate-600 dark:text-slate-300">{{ overallStatus }}</p>
-    </div>
+  </div>
 </template>
 
 <script setup>
@@ -86,7 +118,6 @@ const overallStatus = ref('');
 const stopRequested = ref(false);
 const resumeIndex = ref(0);
 
-// START: Expanded Country code data and selection
 const countries = ref([
   { name: 'No Default Country Code', code: '' },
   { name: 'Afghanistan (AF)', code: '93' },
@@ -326,19 +357,15 @@ const countries = ref([
   { name: 'Yemen (YE)', code: '967' },
   { name: 'Zambia (ZM)', code: '260' },
   { name: 'Zimbabwe (ZW)', code: '263' }
-  // This list is extensive but might not be 100% exhaustive or perfectly up-to-date.
-  // For a truly complete and maintained list, consider integrating a dedicated library or API.
 ]);
-const selectedCountryCode = ref(''); // Default to no country code, meaning numbers should be international or will use basic cleaning
-// END: Country code data and selection
+const selectedCountryCode = ref('');
 
 const parseNumbers = (input) => {
   if (!input) return [];
-  // Keep original input mostly, backend will normalize with country code context
   return input
-    .split(/[,;\n]+/) // Split by comma, semicolon, or newline
-    .map(num => num.trim()) // Trim whitespace
-    .filter(num => num.length > 0); // Remove empty entries
+    .split(/[,;\n]+/)
+    .map(num => num.trim())
+    .filter(num => num.length > 0);
 };
 
 watch(numbersInput, (newVal, oldVal) => {
@@ -397,49 +424,48 @@ const performBulkCheck = async () => {
     overallStatus.value = currentStatusUpdate;
 
     try {
-      // Pass the selectedCountryCode.value to the API call
       const response = await checkWhatsAppNumberApi(
         sessionStore.currentSelectedSessionId,
         number,
-        selectedCountryCode.value // Pass the selected code
+        selectedCountryCode.value
       );
       
       const displayNum = response.numId ? response.numId.replace('@c.us', '') : number;
 
-      if (stopRequested.value && i < allParsedNumbers.length -1 ) { 
-           resumeIndex.value = i; 
-       } else if (stopRequested.value && i === allParsedNumbers.length -1) { 
-           resumeIndex.value = 0; 
-           overallStatus.value = `Check stopped after processing all numbers. Processed ${bulkCheckStore.registeredNumbers.length + bulkCheckStore.unregisteredNumbers.length} of ${allParsedNumbers.length}.`;
-      } else { 
-          if (response.success && response.isRegistered) {
-            bulkCheckStore.addRegisteredNumber(displayNum); 
-            overallStatus.value = `${currentStatusUpdate} Registered (${displayNum}).`;
-          } else if (response.success && !response.isRegistered) {
-            bulkCheckStore.addUnregisteredNumber({ number: displayNum, reason: 'Not registered' });
-            overallStatus.value = `${currentStatusUpdate} Not Registered (${displayNum}).`;
-          } else {
-            bulkCheckStore.addUnregisteredNumber({ number, reason: response.error || 'Failed to check (API error)' });
-            overallStatus.value = `${currentStatusUpdate} Error: ${response.error || 'API Error'}.`;
-          }
+      if (stopRequested.value && i < allParsedNumbers.length -1 ) {    
+        resumeIndex.value = i;    
+      } else if (stopRequested.value && i === allParsedNumbers.length -1) {    
+        resumeIndex.value = 0;    
+        overallStatus.value = `Check stopped after processing all numbers. Processed ${bulkCheckStore.registeredNumbers.length + bulkCheckStore.unregisteredNumbers.length} of ${allParsedNumbers.length}.`;
+      } else {    
+        if (response.success && response.isRegistered) {
+          bulkCheckStore.addRegisteredNumber(displayNum);    
+          overallStatus.value = `${currentStatusUpdate} Registered (${displayNum}).`;
+        } else if (response.success && !response.isRegistered) {
+          bulkCheckStore.addUnregisteredNumber({ number: displayNum, reason: 'Not registered' });
+          overallStatus.value = `${currentStatusUpdate} Not Registered (${displayNum}).`;
+        } else {
+          bulkCheckStore.addUnregisteredNumber({ number, reason: response.error || 'Failed to check (API error)' });
+          overallStatus.value = `${currentStatusUpdate} Error: ${response.error || 'API Error'}.`;
+        }
       }
     } catch (error) {
         if (!stopRequested.value) {
-         bulkCheckStore.addUnregisteredNumber({ number, reason: error.message || 'Network error' });
-         overallStatus.value = `${currentStatusUpdate} Error: ${error.message || 'Network Error'}.`;
-       } else {
+          bulkCheckStore.addUnregisteredNumber({ number, reason: error.message || 'Network error' });
+          overallStatus.value = `${currentStatusUpdate} Error: ${error.message || 'Network Error'}.`;
+        } else {
           resumeIndex.value = i;
-       }
+        }
     }
-  } 
+  }    
 
   isChecking.value = false;
-  
+    
   if (!stopRequested.value) {
     overallStatus.value = `Bulk check complete. Processed ${allParsedNumbers.length} numbers.`;
     resumeIndex.value = 0;
   }
-  
+    
   bulkCheckStore.setBulkCheckComplete();
 };
 

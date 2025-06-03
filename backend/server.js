@@ -11,7 +11,7 @@ const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
-const app = express();
+const app = express(); // Corrected: Initialize Express app for CommonJS require
 
 // CORS Configuration
 const corsOriginEnv = process.env.CORS_ORIGIN || 'http://localhost:3000';
@@ -31,55 +31,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
-// --- Serve Frontend ---
-const frontendDistPath = path.join(__dirname, 'frontend_build');
-app.use(express.static(frontendDistPath));
-console.log(`Serving static files from: ${frontendDistPath}`);
-
-// --- START: New Number Normalization Function ---
-function normalizeToJid(rawNumber, userSelectedCountryCode) {
-    if (typeof rawNumber !== 'string') {
-        rawNumber = String(rawNumber);
-    }
-
-    if (rawNumber.includes('@')) {
-        return rawNumber; // Already a JID (e.g., for groups)
-    }
-
-    // Handle numbers that already start with '+' (international format)
-    if (rawNumber.startsWith('+')) {
-        return `${rawNumber.substring(1).replace(/\D/g, '')}@c.us`;
-    }
-
-    let cleanedNumber = rawNumber.replace(/\D/g, ''); // Remove non-digits for further processing
-
-    if (userSelectedCountryCode && String(userSelectedCountryCode).trim() !== "") {
-        const cc = String(userSelectedCountryCode).replace(/\D/g, ''); // Ensure country code is digits
-
-        // Case 1: Number starts with '0' (common national trunk code)
-        if (cleanedNumber.startsWith('0')) {
-            // Remove leading '0' and prepend the selected country code
-            return `${cc}${cleanedNumber.substring(1)}@c.us`;
-        }
-        // Case 2: Number already starts with the selected country code
-        else if (cleanedNumber.startsWith(cc)) {
-            return `${cleanedNumber}@c.us`;
-        }
-        // Case 3: Assume it's a local number for the selected country, needs cc prepended
-        // (e.g., number is "821..." and selectedCountryCode is "62" -> "62821...")
-        else {
-            return `${cc}${cleanedNumber}@c.us`;
-        }
-    } else {
-        // No country code selected by user, or it's an empty string.
-        // Fallback: assume number might be E.164 without '+' (e.g., "62812...") or just needs cleaning.
-        // This will NOT correctly format local numbers like "08..." or "8..." if no country code is specified by the user.
-        return `${cleanedNumber}@c.us`;
-    }
-}
-// --- END: New Number Normalization Function ---
-
 
 // --- Authentication & User Setup ---
 const JWT_SECRET = process.env.JWT_SECRET || 'defaultjwtsecretfordev';
@@ -127,7 +78,6 @@ const PORT = process.env.PORT || 3000;
 const sessions = {};
 const qrCodes = {};
 const clientReadyStatus = {};
-// Add an initialization lock to prevent duplicate session creation
 const initializing = {};
 
 // Clean up function to properly remove all session data
@@ -237,7 +187,51 @@ function createWhatsappSession(sessionId) {
     return client;
 }
 
-// --- API Routes ---
+// --- Number Normalization Function ---
+function normalizeToJid(rawNumber, userSelectedCountryCode) {
+    if (typeof rawNumber !== 'string') {
+        rawNumber = String(rawNumber);
+    }
+
+    if (rawNumber.includes('@')) {
+        return rawNumber; // Already a JID (e.g., for groups)
+    }
+
+    // Handle numbers that already start with '+' (international format)
+    if (rawNumber.startsWith('+')) {
+        return `${rawNumber.substring(1).replace(/\D/g, '')}@c.us`;
+    }
+
+    let cleanedNumber = rawNumber.replace(/\D/g, ''); // Remove non-digits for further processing
+
+    if (userSelectedCountryCode && String(userSelectedCountryCode).trim() !== "") {
+        const cc = String(userSelectedCountryCode).replace(/\D/g, ''); // Ensure country code is digits
+
+        // Case 1: Number starts with '0' (common national trunk code)
+        if (cleanedNumber.startsWith('0')) {
+            // Remove leading '0' and prepend the selected country code
+            return `${cc}${cleanedNumber.substring(1)}@c.us`;
+        }
+        // Case 2: Number already starts with the selected country code
+        else if (cleanedNumber.startsWith(cc)) {
+            return `${cleanedNumber}@c.us`;
+        }
+        // Case 3: Assume it's a local number for the selected country, needs cc prepended
+        // (e.g., number is "821..." and selectedCountryCode is "62" -> "62821...")
+        else {
+            return `${cc}${cleanedNumber}@c.us`;
+        }
+    } else {
+        // No country code selected by user, or it's an empty string.
+        // Fallback: assume number might be E.164 without '+' (e.g., "62812...") or just needs cleaning.
+        // This will NOT correctly format local numbers like "08..." or "8..." if no country code is specified by the user.
+        return `${cleanedNumber}@c.us`;
+    }
+}
+
+
+// --- ALL API Routes (MUST BE BEFORE app.use(express.static)) ---
+
 app.post('/auth/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ success: false, error: 'Username and password are required.' });
@@ -253,7 +247,6 @@ app.post('/auth/login', async (req, res) => {
 app.post('/session/init/:sessionId', authenticateToken, (req, res) => {
     const { sessionId } = req.params;
     
-    // Check if already initializing to prevent duplicate initialization
     if (initializing[sessionId]) {
         return res.json({ 
             success: true, 
@@ -273,8 +266,6 @@ app.post('/session/init/:sessionId', authenticateToken, (req, res) => {
                 });
             })
             .catch(() => { 
-                // If getState fails, session needs to be recreated
-                // First clean up any existing data
                 if (sessions[sessionId]) {
                     try { sessions[sessionId].destroy(); } catch(e) { /* ignore */ }
                     cleanupSession(sessionId);
@@ -339,7 +330,260 @@ app.post('/session/remove/:sessionId', authenticateToken, async (req, res) => {
     res.json({ success: true, message: `Session '${sessionId}' removed.` });
 });
 
-// Rest of your routes - no changes needed
+app.post('/session/send-message/:sessionId', authenticateToken, async (req, res) => {
+    const { sessionId } = req.params;
+    const { number, message, countryCode } = req.body;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+    if (!number || !message) {
+        return res.status(400).json({ success: false, error: 'Number and message are required.' });
+    }
+
+    try {
+        const jid = normalizeToJid(number, countryCode);
+        await client.sendMessage(jid, message);
+        res.json({ success: true, message: 'Message sent.' });
+    } catch (error) {
+        console.error(`Error sending message for session ${sessionId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/session/send-image/:sessionId', authenticateToken, upload.single('file'), async (req, res) => {
+    const { sessionId } = req.params;
+    const { number, caption, url, countryCode } = req.body;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+    if (!number) {
+        return res.status(400).json({ success: false, error: 'Recipient number is required.' });
+    }
+
+    try {
+        const jid = normalizeToJid(number, countryCode);
+        let media;
+        if (req.file) {
+            media = new MessageMedia(req.file.mimetype, req.file.buffer.toString('base64'));
+        } else if (url) {
+            media = await MessageMedia.fromUrl(url);
+        } else {
+            return res.status(400).json({ success: false, error: 'No file uploaded or URL provided.' });
+        }
+
+        await client.sendMessage(jid, media, { caption: caption || '' });
+        res.json({ success: true, message: 'Media sent.' });
+    } catch (error) {
+        console.error(`Error sending media for session ${sessionId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/session/send-location/:sessionId', authenticateToken, async (req, res) => {
+    const { sessionId } = req.params;
+    const { number, latitude, longitude, description, countryCode } = req.body;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+    if (!number || typeof latitude === 'undefined' || typeof longitude === 'undefined') {
+        return res.status(400).json({ success: false, error: 'Number, latitude, and longitude are required.' });
+    }
+
+    try {
+        const jid = normalizeToJid(number, countryCode);
+        const location = new Location(latitude, longitude, description || '');
+        await client.sendMessage(jid, location);
+        res.json({ success: true, message: 'Location sent.' });
+    } catch (error) {
+        console.error(`Error sending location for session ${sessionId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/session/contact-info/:sessionId/:contactId', authenticateToken, async (req, res) => {
+    const { sessionId, contactId } = req.params;
+    const { countryCode } = req.query;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+    if (!contactId) {
+        return res.status(400).json({ success: false, error: 'Contact ID is required.' });
+    }
+
+    try {
+        const jid = normalizeToJid(contactId, countryCode);
+        const contact = await client.getContactById(jid);
+        
+        let profilePicUrl = null;
+        try {
+            profilePicUrl = await client.getProfilePicUrl(jid);
+        } catch (e) {
+            console.warn(`Could not get profile picture for ${jid}: ${e.message}`);
+        }
+
+        const contactInfo = {
+            id: contact.id._serialized,
+            name: contact.name || contact.pushname,
+            number: contact.number,
+            isBusiness: contact.isBusiness,
+            pushname: contact.pushname,
+            profileStatus: contact.statusMessege,
+            profilePicUrl: profilePicUrl
+        };
+        res.json({ success: true, contact: contactInfo });
+    } catch (error) {
+        console.error(`Error getting contact info for session ${sessionId}, contact ${contactId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/session/set-status/:sessionId', authenticateToken, async (req, res) => {
+    const { sessionId } = req.params;
+    const { statusMessage } = req.body;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+    if (typeof statusMessage === 'undefined' || statusMessage === null) {
+        return res.status(400).json({ success: false, error: 'Status message is required.' });
+    }
+
+    try {
+        await client.setStatus(statusMessage);
+        res.json({ success: true, message: 'Status updated successfully.' });
+    } catch (error) {
+        console.error(`Error setting status for session ${sessionId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/session/:sessionId/chat/:chatId/send-typing', authenticateToken, async (req, res) => {
+    const { sessionId, chatId } = req.params;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+
+    try {
+        await client.sendSeen(chatId);
+        res.json({ success: true, message: 'Typing state sent (simulated as seen).' });
+    } catch (error) {
+        console.error(`Error sending typing state for session ${sessionId}, chat ${chatId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/session/:sessionId/chat/:chatId/send-seen', authenticateToken, async (req, res) => {
+    const { sessionId, chatId } = req.params;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+
+    try {
+        await client.sendSeen(chatId);
+        res.json({ success: true, message: 'Seen receipt sent.' });
+    } catch (error) {
+        console.error(`Error sending seen receipt for session ${sessionId}, chat ${chatId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/session/:sessionId/set-presence-online', authenticateToken, async (req, res) => {
+    const { sessionId } = req.params;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+
+    try {
+        await client.setStatus('Online');
+        res.json({ success: true, message: 'Presence set to Online.' });
+    } catch (error) {
+        console.error(`Error setting presence online for session ${sessionId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.get('/session/chats/:sessionId', authenticateToken, async (req, res) => {
+    const { sessionId } = req.params;
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+
+    try {
+        const chats = await client.getChats();
+        const normalizedChats = chats.map(chat => ({
+            id: chat.id._serialized,
+            name: chat.name || chat.id._serialized,
+            unreadCount: chat.unreadCount,
+            isGroup: chat.isGroup,
+            lastMessage: chat.lastMessage ? {
+                id: chat.lastMessage.id._serialized,
+                body: chat.lastMessage.body,
+                from: chat.lastMessage.from._serialized,
+                to: chat.lastMessage.to._serialized,
+                fromMe: chat.lastMessage.fromMe,
+                timestamp: chat.lastMessage.timestamp,
+                type: chat.lastMessage.type,
+                author: chat.lastMessage.author ? chat.lastMessage.author._serialized : null,
+                isGroupMsg: chat.lastMessage.isGroupMsg,
+                hasMedia: chat.lastMessage.hasMedia,
+            } : null,
+            timestamp: chat.lastMessage ? chat.lastMessage.timestamp : 0,
+        }));
+        res.json({ success: true, chats: normalizedChats });
+    } catch (error) {
+        console.error(`Error fetching chats for session ${sessionId}:`, error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// New route for checking if a number is registered
+app.get('/session/is-registered/:sessionId/:numberToCheck', authenticateToken, async (req, res) => {
+    const { sessionId, numberToCheck } = req.params;
+    const { countryCode } = req.query;
+
+    const client = sessions[sessionId];
+
+    if (!client || !clientReadyStatus[sessionId]) {
+        return res.status(400).json({ success: false, error: 'Session not ready or not found.' });
+    }
+    if (!numberToCheck) {
+        return res.status(400).json({ success: false, error: 'Number to check is required.' });
+    }
+
+    try {
+        const jid = normalizeToJid(numberToCheck, countryCode);
+        const isRegistered = await client.isRegisteredUser(jid); 
+
+        res.json({ success: true, number: numberToCheck, isRegistered: isRegistered });
+    } catch (error) {
+        console.error(`Error checking number registration for session ${sessionId}, number ${numberToCheck}:`, error);
+        res.status(500).json({ success: false, error: error.message || 'Internal server error.' });
+    }
+});
+
+
+// --- Serve Frontend (MOVED DOWN TO ENSURE API ROUTES ARE PRIORITIZED) ---
+const frontendDistPath = path.join(__dirname, 'frontend_build');
+app.use(express.static(frontendDistPath));
+console.log(`Serving static files from: ${frontendDistPath}`);
+
 
 // --- Socket.IO Listeners ---
 io.on('connection', (socket) => {
@@ -370,7 +614,7 @@ io.on('connection', (socket) => {
                 socket.emit('status_update', { 
                     sessionId, 
                     message: 'Session not active.',
-                    qrCleared: true  // Tell frontend to clear any cached QR
+                    qrCleared: true
                 });
             }
         }
@@ -379,7 +623,6 @@ io.on('connection', (socket) => {
     socket.on('request_init_session', (sessionId) => { 
         if (!sessionId) return;
         
-        // Check if already initializing
         if (initializing[sessionId]) {
             console.log(`[${sessionId}] Session initialization already in progress, not starting again`);
             socket.emit('status_update', { 
@@ -399,7 +642,6 @@ io.on('connection', (socket) => {
                         status: st
                     });
                     
-                    // If we have a QR code for this session, send it
                     if (qrCodes[sessionId]) {
                         console.log(`[${sessionId}] Sending existing QR code`);
                         socket.emit('qr_code', { 
@@ -409,17 +651,14 @@ io.on('connection', (socket) => {
                     }
                 })
                 .catch(() => { 
-                    // If getState fails, safely recreate
                     console.log(`[${sessionId}] Session exists but getState failed, recreating`);
                     
-                    // First destroy the existing session
                     if (sessions[sessionId]) {
                         try { sessions[sessionId].destroy(); } catch(e) { /* ignore */ }
                         cleanupSession(sessionId);
                     }
                     
-                    // Then create a new one
-                    createWhatsappSession(sessionId);
+                    createWhatsappSession(sessionId); 
                     socket.emit('status_update', { 
                         sessionId, 
                         message: `Session re-initializing.`
