@@ -31,22 +31,23 @@ WORKDIR /usr/src/app
 # - Common ones for Puppeteer
 # - 'chromium' browser itself
 # - 'dumb-init' for better signal handling
-RUN apt-get update && apt-get install -yq --no-install-recommends \
-    # --- Other essential Puppeteer dependencies ---
+RUN apt-get update && apt-get install -y \
     ca-certificates \
     fonts-liberation \
-    libatk-bridge2.0-0t64 \ # Note: -0t64 might be automatically selected if -0 is specified, confirm from your base image if needed
-    libatk1.0-0t64 \
+    libappindicator3-1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
     libc6 \
     libcairo2 \
-    libcups2t64 \
+    libcups2 \
     libdbus-1-3 \
     libexpat1 \
     libfontconfig1 \
     libgbm1 \
-    libgcc-s1 \ # Note: This was selected instead of libgcc1 in your log
-    libglib2.0-0t64 \
-    libgtk-3-0t64 \
+    libgcc1 \
+    libglib2.0-0 \
+    libgtk-3-0 \
     libnspr4 \
     libnss3 \
     libpango-1.0-0 \
@@ -68,12 +69,10 @@ RUN apt-get update && apt-get install -yq --no-install-recommends \
     lsb-release \
     wget \
     xdg-utils \
-    # --- Audio library fix ---
-    libasound2t64 \ # Explicitly install the t64 version
-    # --- Chromium browser ---
-    chromium-browser \ # Note: This was selected instead of chromium in your log
-    --fix-missing && \
-    rm -rf /var/lib/apt/lists/*
+    chromium \
+    dumb-init \
+    --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create backend directory and set it as WORKDIR for subsequent backend operations
 RUN mkdir -p backend
