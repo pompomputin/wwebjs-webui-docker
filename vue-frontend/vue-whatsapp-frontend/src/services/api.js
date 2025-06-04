@@ -86,7 +86,6 @@ export const removeSessionApi = (sessionId) => {
     return request(`/session/remove/${sessionId}`, { method: 'POST' });
 };
 
-// --- Updated function to check WhatsApp Number ---
 export const checkWhatsAppNumberApi = (sessionId, numberToCheck, countryCode) => { 
     let endpoint = `/session/is-registered/${sessionId}/${encodeURIComponent(numberToCheck)}`;
     if (countryCode && String(countryCode).trim() !== "") {
@@ -143,15 +142,13 @@ export const setStatusApi = (sessionId, statusMessage) => {
     });
 };
 
-// MODIFIED: setOnlinePresenceSettingApi (renamed from setPresenceOnlineApi to reflect its purpose of setting a setting)
 export const setOnlinePresenceSettingApi = (sessionId, enabled) => {
     return request(`/session/${sessionId}/set-presence-online`, {
         method: 'POST',
-        body: JSON.stringify({ enabled }), // Pass the state of the toggle
+        body: JSON.stringify({ enabled }),
     });
 };
 
-// NEW API CALLS: For Typing Indicator Setting
 export const setTypingIndicatorSettingApi = (sessionId, enabled) => {
     return request(`/session/${sessionId}/settings/typing`, {
         method: 'POST',
@@ -159,7 +156,6 @@ export const setTypingIndicatorSettingApi = (sessionId, enabled) => {
     });
 };
 
-// NEW API CALLS: For Auto Send Seen Setting
 export const setAutoSendSeenSettingApi = (sessionId, enabled) => {
     return request(`/session/${sessionId}/settings/autoseen`, {
         method: 'POST',
@@ -179,8 +175,35 @@ export const sendSeenApi = (sessionId, chatId) => {
     });
 };
 
-export const setPresenceOnlineApi = (sessionId) => {
-    return request(`/session/${sessionId}/set-presence-online`, {
+// --- Auto-Responder API Calls (NEW) ---
+
+export const getAutoRespondersApi = (sessionId) => {
+    return request(`/session/${sessionId}/auto-responders`, { method: 'GET' });
+};
+
+export const createAutoResponderApi = (sessionId, responderData) => {
+    return request(`/session/${sessionId}/auto-responders`, {
         method: 'POST',
+        body: JSON.stringify(responderData),
+    });
+};
+
+export const updateAutoResponderApi = (sessionId, responderId, responderData) => {
+    return request(`/session/${sessionId}/auto-responders/${responderId}`, {
+        method: 'PUT',
+        body: JSON.stringify(responderData),
+    });
+};
+
+export const deleteAutoResponderApi = (sessionId, responderId) => {
+    return request(`/session/${sessionId}/auto-responders/${responderId}`, {
+        method: 'DELETE',
+    });
+};
+
+export const deleteBatchAutoRespondersApi = (sessionId, responderIds) => {
+    return request(`/session/${sessionId}/auto-responders/batch-delete`, {
+        method: 'POST', // Using POST for batch delete as body is needed
+        body: JSON.stringify({ ids: responderIds }),
     });
 };

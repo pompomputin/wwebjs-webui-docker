@@ -43,7 +43,8 @@ export const useSessionStore = defineStore('sessions', () => {
                 sessionId: id,
                 isReady: data.isReady || false,
                 hasQr: effectiveHasQr,
-                qrCode: (data.isReady || (!data.hasQr && !qrCodeIsPresent && !existingClientSession.qrCode)) ? null : qrCodeValue, // Corrected 's.isReady' to 'data.isReady' and 'existingClientSession' to 'data'
+                // CORRECTED: Replaced existingClientSession.qrCode with data.qrCode
+                qrCode: (data.isReady || (!data.hasQr && !qrCodeIsPresent && !data.qrCode)) ? null : qrCodeValue, 
                 statusMessage: derivedStatusMessage,
                 settings: data.settings || {}
             };
@@ -126,10 +127,8 @@ export const useSessionStore = defineStore('sessions', () => {
             if (data.sessionId && data.message) {
                 if (sessions.value[data.sessionId]) {
                     sessions.value[data.sessionId].statusMessage = data.message;
-                    // NEW: Update settings if included in status_update
                     if (data.settings) {
                         sessions.value[data.sessionId].settings = { ...data.settings };
-                        // If this is the currently selected session, update the reactive toggles
                         if (data.sessionId === currentSelectedSessionId.value) {
                             sessionFeatureToggles.value = { ...data.settings };
                         }
@@ -193,7 +192,7 @@ export const useSessionStore = defineStore('sessions', () => {
             ...(sessions.value[sessionId] || { sessionId: sessionId }),
             isReady: false, hasQr: false, qrCode: null,
             statusMessage: isExistingSession ? 'Re-initializing (API)...' : 'Initializing (API)...',
-            settings: sessions.value[sessionId]?.settings || {} // NEW: Retain or initialize settings
+            settings: sessions.value[sessionId]?.settings || {}
         };
 
         try {
@@ -304,7 +303,6 @@ export const useSessionStore = defineStore('sessions', () => {
             currentSelectedSessionId.value = sessionId; 
             globalStatusMessage.value = sessionId ? `Selected: ${sessionId}` : 'No session selected.'; 
             quickSendRecipientId.value = null; 
-            // NEW: Initialize sessionFeatureToggles from the selected session's settings
             sessionFeatureToggles.value = { 
                 isTypingIndicatorEnabled: sessions.value[sessionId]?.settings?.isTypingIndicatorEnabled || false,
                 autoSendSeenEnabled: sessions.value[sessionId]?.settings?.autoSendSeenEnabled || false,
@@ -321,33 +319,30 @@ export const useSessionStore = defineStore('sessions', () => {
     }
     function setQuickSendRecipient(recipientId) { quickSendRecipientId.value = recipientId; }
     
-    // MODIFIED: toggleTypingIndicator to make API call
     async function toggleTypingIndicator(enabled) {
         if (!currentSelectedSessionId.value) return { success: false, error: 'No session selected.' };
         const result = await setTypingIndicatorSettingApi(currentSelectedSessionId.value, enabled);
         if (result.success) {
-            sessionFeatureToggles.value.isTypingIndicatorEnabled = enabled; // Update local state on success
-            if (sessions.value[currentSelectedSessionId.value]) { // Update in-memory backend state representation
+            sessionFeatureToggles.value.isTypingIndicatorEnabled = enabled;
+            if (sessions.value[currentSelectedSessionId.value]) {
                 sessions.value[currentSelectedSessionId.value].settings.isTypingIndicatorEnabled = enabled;
             }
         }
         return result;
     }
 
-    // MODIFIED: toggleAutoSendSeen to make API call
     async function toggleAutoSendSeen(enabled) {
         if (!currentSelectedSessionId.value) return { success: false, error: 'No session selected.' };
         const result = await setAutoSendSeenSettingApi(currentSelectedSessionId.value, enabled);
         if (result.success) {
-            sessionFeatureToggles.value.autoSendSeenEnabled = enabled; // Update local state on success
-            if (sessions.value[currentSelectedSessionId.value]) { // Update in-memory backend state representation
+            sessionFeatureToggles.value.autoSendSeenEnabled = enabled;
+            if (sessions.value[currentSelectedSessionId.value]) {
                 sessions.value[currentSelectedSessionId.value].settings.autoSendSeenEnabled = enabled;
             }
         }
         return result;
     }
     
-    // MODIFIED: toggleMaintainOnlinePresence to use setOnlinePresenceSettingApi and return result
     async function toggleMaintainOnlinePresence(enabled) {
         const shouldBeEnabled = typeof enabled === 'boolean' ? enabled : !sessionFeatureToggles.value.maintainOnlinePresenceEnabled;
         let result = { success: false, error: 'Operation not performed.' };
@@ -358,8 +353,8 @@ export const useSessionStore = defineStore('sessions', () => {
         try {
             result = await setOnlinePresenceSettingApi(currentSelectedSessionId.value, shouldBeEnabled);
             if (result.success) { 
-                sessionFeatureToggles.value.maintainOnlinePresenceEnabled = shouldBeEnabled; // Update local state on success
-                if (sessions.value[currentSelectedSessionId.value]) { // Update in-memory backend state representation
+                sessionFeatureToggles.value.maintainOnlinePresenceEnabled = shouldBeEnabled;
+                if (sessions.value[currentSelectedSessionId.value]) {
                     sessions.value[currentSelectedSessionId.value].settings.maintainOnlinePresenceEnabled = shouldBeEnabled;
                 }
                 globalStatusMessage.value = `Session ${currentSelectedSessionId.value} online presence set to ${shouldBeEnabled ? 'enabled' : 'disabled'}.`; 
@@ -368,7 +363,7 @@ export const useSessionStore = defineStore('sessions', () => {
             }
         } catch (error) {
             globalStatusMessage.value = `Network error setting presence for ${currentSelectedSessionId.value}: ${error.message}`; 
-            result = { success: false, error: error.message }; // Ensure result object is returned
+            result = { success: false, error: error.message };
         }
         return result;
     }
@@ -383,6 +378,6 @@ export const useSessionStore = defineStore('sessions', () => {
         toggleTypingIndicator, toggleAutoSendSeen, toggleMaintainOnlinePresence,
         updateSessionQr, setSessionAuthenticated, setSessionReady, setSessionAuthFailure,
         handleSessionRemoved, setSessionDisconnected, setSessionInitError, updateGlobalStatus,
-        initializeSocketListeners // EXPOSED: initializeSocketListeners
+        initializeSocketListeners
     };
 });
