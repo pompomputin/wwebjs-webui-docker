@@ -369,6 +369,10 @@ app.post('/session/:sessionId/set-presence-online', authenticateToken, async (re
     }
 });
 
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend_build', 'index.html'));
+});
+
 // --- Socket.IO Listeners ---
 io.on('connection', (socket) => {
     if (!socket.user) { socket.disconnect(true); return; } 
