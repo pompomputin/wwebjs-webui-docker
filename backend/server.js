@@ -10,6 +10,7 @@ const multer = require('multer');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const spaFallback = require('./spa-fallback.js');
 
 const app = express();
 
@@ -368,6 +369,8 @@ app.post('/session/:sessionId/set-presence-online', authenticateToken, async (re
         res.status(500).json({ success: false, error: e.message });
     }
 });
+
+app.use(spaFallback);
 
 // --- Socket.IO Listeners ---
 io.on('connection', (socket) => {
